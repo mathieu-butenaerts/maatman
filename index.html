@@ -3,196 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MaatMan · Profource</title>
+<title>Overzicht · MaatMan</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="cao-schalen.js"></script>
-<style>
-  :root{
-    --bg1:#101b28; --bg2:#14212f; --bg3:#192738;
-    --panel:#1b2b3d; --panel2:#22344a; --border:#2a3a4d;
-    --blauw:#199DD9; --blauw-l:#4ab8e6; --indigo:#11448D; --violet:#83007D; --magenta:#E9167D;
-    --text:#eef3f8; --sub:#cfe0f0; --muted:#8ea2b8; --dim:#5f7690;
-    --groen:#2fbf7a; --groen-bg:rgba(47,191,122,0.14);
-    --rood:#E9167D; --rood-bg:rgba(233,22,125,0.14);
-    --check:#c060b8; --check-bg:rgba(131,0,125,0.20);
-    color-scheme: dark;
-  }
-  *{ box-sizing:border-box; }
-  html,body{ margin:0; padding:0; }
-  body{
-    font-family:'IBM Plex Sans',sans-serif; color:var(--text); font-size:14px;
-    -webkit-font-smoothing:antialiased;
-    background:
-      radial-gradient(1200px circle at 88% -8%, rgba(25,157,217,0.14), transparent 55%),
-      radial-gradient(900px circle at -5% 8%, rgba(17,68,141,0.20), transparent 55%),
-      linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 55%,var(--bg3) 100%);
-    background-color:var(--bg1);
-    background-attachment:fixed;
-  }
-  a{ color:var(--blauw); }
-  a:hover{ color:var(--magenta); }
-  h1,h2,h3{ font-family:'Archivo',sans-serif; text-wrap:balance; }
-  .tnum{ font-variant-numeric:tabular-nums; white-space:nowrap; }
-  button{ font-family:inherit; }
-  button:focus-visible, input:focus-visible, select:focus-visible, label.btn:focus-visible, tr.rij:focus-visible{ outline:2px solid var(--blauw); outline-offset:2px; }
-  ::-webkit-scrollbar{ width:10px; height:10px; }
-  ::-webkit-scrollbar-track{ background:transparent; }
-  ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:6px; }
-  @keyframes fadeInUp{ from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
-  @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
-  [hidden]{ display:none !important; }
-
-  .shell{ max-width:1200px; margin:0 auto; padding:28px 32px 70px; display:flex; flex-direction:column; }
-  @media (max-width:640px){ .shell{ padding:20px 16px 50px; } }
-
-  /* ---- topbar ---- */
-  .topbar{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
-    padding-bottom:20px; margin-bottom:22px; border-bottom:1px solid rgba(255,255,255,0.08); }
-  .brand{ display:flex; align-items:center; gap:16px; }
-  .wordmark{ display:flex; align-items:center; gap:9px; }
-  .wordmark .wm-text{ font-family:'Archivo',sans-serif; font-size:20px; color:var(--blauw); font-weight:500; line-height:1; }
-  .wordmark .wm-text b{ color:var(--text); font-weight:700; }
-  .title-block{ padding-left:16px; border-left:1px solid rgba(255,255,255,0.12); }
-  .title-block h1{ font-size:17px; font-weight:600; margin:0; line-height:1.1; }
-  .title-block .subtitle{ font-size:11px; color:var(--dim); margin-top:4px; letter-spacing:.05em; text-transform:uppercase; }
-  .topmeta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .btn{ font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:8px; border:1px solid rgba(25,157,217,0.4);
-    background:rgba(25,157,217,0.10); color:var(--blauw); cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:7px;
-    text-decoration:none; }
-  .btn:hover{ background:rgba(25,157,217,0.18); color:var(--blauw); }
-  .btn-quiet{ border-color:var(--border); background:var(--panel2); color:var(--sub); }
-  .btn-quiet:hover{ border-color:var(--blauw); color:var(--text); }
-  .btn-danger{ border-color:rgba(233,22,125,0.45); background:rgba(233,22,125,0.10); color:var(--magenta); }
-  .btn-danger:hover{ background:rgba(233,22,125,0.18); color:var(--magenta); }
-
-  /* ---- intro + controls ---- */
-  .intro{ color:var(--muted); font-size:13px; max-width:80ch; margin:0 0 18px; line-height:1.55; }
-  .notice{ background:rgba(25,157,217,0.08); border:1px solid rgba(25,157,217,0.35); color:var(--sub); border-radius:14px; padding:10px 14px; font-size:12.5px; margin-bottom:16px; }
-  .notice.err{ background:rgba(233,22,125,0.10); border-color:rgba(233,22,125,0.35); color:#f0b6cf; }
-  .filters{ display:flex; flex-wrap:wrap; gap:14px 20px; align-items:flex-end; background:var(--panel); border:1px solid var(--border);
-    border-radius:14px; padding:14px 16px; margin-bottom:16px; }
-  .ctl{ display:flex; flex-direction:column; gap:6px; }
-  .ctl > span, .field-label{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
-  input, select{ font-family:inherit; font-size:12.5px; padding:8px 10px; border-radius:8px; border:1px solid var(--border);
-    background:var(--bg2); color:var(--text); min-width:0; width:100%; }
-  input[type=checkbox]{ width:auto; accent-color:var(--blauw); }
-  input[type=number]{ font-variant-numeric:tabular-nums; }
-  .ctl input[type=date]{ width:170px; }
-  .pills{ display:flex; flex-wrap:wrap; gap:6px; }
-  .mode-btn{ font-size:11.5px; font-weight:600; padding:7px 13px; border-radius:999px; cursor:pointer;
-    background:rgba(255,255,255,0.04); color:var(--muted); border:1px solid rgba(255,255,255,0.1); }
-  .mode-btn:hover{ color:var(--text); }
-  .mode-btn[aria-pressed=true]{ background:rgba(25,157,217,0.18); color:var(--blauw); border-color:rgba(25,157,217,0.45); }
-  .mode-btn:disabled{ cursor:default; }
-  .mode-btn:disabled:hover{ color:var(--muted); }
-
-  /* ---- kpi cards ---- */
-  .cards{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:16px; }
-  @media (max-width:900px){ .cards{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
-  .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; animation:fadeInUp .4s ease both; min-width:0; }
-  .card .label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
-  .card .value{ font-family:'Archivo',sans-serif; font-size:30px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-  .card .sub{ font-size:11px; color:var(--dim); margin-top:6px; }
-  .card.accent{ background:rgba(25,157,217,0.08); border-color:rgba(25,157,217,0.35); }
-  .card.accent .value{ color:var(--blauw); }
-  .card.bad{ background:rgba(233,22,125,0.08); border-color:rgba(233,22,125,0.35); }
-  .card.bad .value{ color:var(--magenta); }
-  .card.good .value{ color:var(--groen); }
-
-  /* ---- panels + tables ---- */
-  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; margin-bottom:16px; overflow:hidden; }
-  .panel-head{ display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; padding:14px 18px; }
-  .panel-head h2{ font-size:14px; font-weight:600; margin:0; }
-  .hint{ color:var(--dim); font-weight:400; font-size:11.5px; }
-  .scroll{ overflow-x:auto; }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; padding:11px 14px; color:var(--muted); font-weight:600; white-space:nowrap;
-    background:var(--panel2); border-bottom:1px solid var(--border); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; }
-  td{ padding:12px 14px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:middle; }
-  th.r, td.r{ text-align:right; }
-  #allocs > thead > tr > th, #projects > thead > tr > th{ white-space:normal; vertical-align:bottom; }
-  #allocs > tbody > tr.rij > td, #projects > tbody > tr > td:not(.empty-state){ padding:12px 10px; }
-  tbody tr:last-child td{ border-bottom:none; }
-  tr.rij{ cursor:pointer; }
-  tr.rij:hover td{ background:rgba(25,157,217,0.06); }
-  tr.rij.open td{ background:rgba(25,157,217,0.10); }
-  .chev{ width:9px; height:9px; display:inline-flex; transition:transform .15s ease; color:var(--dim); }
-  tr.open .chev{ transform:rotate(90deg); color:var(--blauw); }
-  .naam{ font-weight:600; color:var(--text); }
-  .klein{ font-size:11.5px; color:var(--dim); margin-top:2px; }
-  .pos{ color:var(--groen); }
-  .neg{ color:var(--magenta); }
-  .status{ display:inline-block; border-radius:999px; padding:4px 11px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
-  .status.ok{ background:var(--groen-bg); color:var(--groen); }
-  .status.gap{ background:var(--rood-bg); color:var(--magenta); }
-  .status.chk{ background:var(--check-bg); color:var(--check); }
-  .tag{ font-size:10px; font-weight:700; color:var(--muted); background:var(--panel2); border:1px solid var(--border); border-radius:5px; padding:1px 6px; margin-left:7px; text-transform:uppercase; letter-spacing:.04em; }
-  .empty-state{ text-align:center; color:var(--muted); padding:40px 20px; font-size:13px; }
-
-  /* ---- expanded detail row ---- */
-  tr.detail td{ background:var(--bg2); border-bottom:1px solid var(--border); padding:0; }
-  .detail-inner{ position:sticky; left:0; padding:18px 20px; display:grid; grid-template-columns:290px minmax(0,1fr); gap:24px; }
-  .detail-inner > *{ min-width:0; }
-  @media (max-width:860px){ .detail-inner{ grid-template-columns:minmax(0,1fr); } }
-  .form-col{ display:flex; flex-direction:column; gap:12px; }
-  .grid2{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; }
-  .fld{ display:flex; flex-direction:column; gap:5px; }
-  .fld input, .fld select{ background:var(--panel); }
-  .form-actions{ display:flex; gap:8px; flex-wrap:wrap; padding-top:4px; }
-  .calc-col{ display:flex; flex-direction:column; gap:16px; }
-  .meldingen{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
-  .meldingen li{ background:rgba(131,0,125,0.14); border:1px solid rgba(131,0,125,0.35); border-radius:8px; padding:8px 10px; font-size:12.5px; color:#dda9d8; }
-  .vgl{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
-  @media (max-width:640px){ .vgl{ grid-template-columns:minmax(0,1fr); } }
-  .box{ border:1px solid var(--border); background:var(--panel); border-radius:10px; padding:13px 15px; min-width:0; }
-  .box h3{ font-size:11px; margin:0 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:700; font-family:'IBM Plex Sans',sans-serif; }
-  .box table{ font-size:12.5px; }
-  .box td{ padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; }
-  .box td.r{ padding-left:10px; }
-  .box td .klein{ font-size:11px; }
-  .box tr.tot td{ border-top:1px solid var(--muted); border-bottom:none; font-weight:700; color:var(--text); padding-top:8px; }
-  .box td.uit{ color:var(--dim); text-decoration:line-through; }
-  .uitkomst{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
-  @media (max-width:640px){ .uitkomst{ grid-template-columns:minmax(0,1fr); } }
-  .uitkomst .box .big{ font-family:'Archivo',sans-serif; font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; margin:4px 0; }
-
-  /* ---- assumptions ---- */
-  details.panel > summary{ padding:14px 18px; cursor:pointer; font-family:'Archivo',sans-serif; font-weight:600; font-size:14px; list-style:none; display:flex; gap:10px; align-items:center; }
-  details.panel > summary::-webkit-details-marker{ display:none; }
-  details.panel > summary .chev{ color:var(--dim); }
-  details.panel[open] > summary .chev{ transform:rotate(90deg); color:var(--blauw); }
-  details.panel[open] > summary{ border-bottom:1px solid var(--border); }
-  .aannames{ padding:16px 18px; display:flex; flex-direction:column; gap:20px; }
-  .aannames .row{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-top:10px; }
-  .aannames h3{ font-size:11px; margin:0; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:700; font-family:'IBM Plex Sans',sans-serif; }
-  .check{ display:flex; gap:10px; align-items:flex-start; font-size:13px; color:var(--sub); }
-  .check input{ margin-top:3px; }
-  .levels input{ width:120px; text-align:right; }
-  .levels td{ padding:7px 14px; }
-  footer{ font-size:11.5px; color:var(--dim); max-width:90ch; line-height:1.55; margin-top:8px; }
-  .loading{ text-align:center; color:var(--muted); padding:60px 20px; }
-</style>
+<script src="app.js"></script>
 </head>
 <body>
 <div class="shell">
   <div class="topbar">
     <div class="brand">
       <span class="wordmark">
-        <svg width="38" height="31" viewBox="0 0 42 34" aria-hidden="true">
-          <polygon points="5,2 22,2 17,13 0,13" fill="#83007D"></polygon>
-          <rect x="2" y="15" width="15" height="15" rx="2" fill="#11448D"></rect>
-          <rect x="19" y="17" width="12" height="13" rx="2" fill="#199DD9"></rect>
-        </svg>
+        <svg width="38" height="31" viewBox="0 0 42 34" aria-hidden="true"><polygon points="5,2 22,2 17,13 0,13" fill="#83007D"></polygon><rect x="2" y="15" width="15" height="15" rx="2" fill="#11448D"></rect><rect x="19" y="17" width="12" height="13" rx="2" fill="#199DD9"></rect></svg>
         <span class="wm-text"><b>pro</b>fource</span>
       </span>
-      <div class="title-block">
-        <h1>MaatMan</h1>
-        <div class="subtitle">WTTA · gelijkwaardig belonen</div>
-      </div>
+      <div class="title-block"><h1>MaatMan</h1><div class="subtitle">WTTA · gelijkwaardig belonen</div></div>
     </div>
     <div class="topmeta">
       <a class="btn" href="https://mathieu-butenaerts.github.io/leadbeheer/" target="_blank" rel="noopener noreferrer">Leadbeheer</a>
@@ -201,35 +29,38 @@
       <button class="btn" id="btn-logout">Uitloggen</button>
     </div>
   </div>
+  <nav class="nav" aria-label="Pagina's">
+    <a href="index.html" aria-current="page">Overzicht</a>
+    <a href="calculator.html">Calculator</a>
+    <a href="instellingen.html">Instellingen</a>
+  </nav>
 
   <div id="loading" class="loading">Inloggen controleren…</div>
 
   <main id="app" hidden>
-    <p class="intro">Vergelijkt per projectinzet wat een consultant bij Profource verdient met wat hij of zij volgens de cao van de klant zou verdienen. Een negatief verschil betekent dat de consultant onder het niveau van de klant zit: een risico onder de WTTA.</p>
-
+    <p class="intro">Alle huidige combinaties van consultant en project. Per combinatie zie je of de consultant bij Profource minstens verdient wat hij of zij volgens de cao van de klant zou verdienen. Een negatief verschil is een risico onder de WTTA.</p>
     <div id="notice" class="notice" hidden></div>
 
     <div class="filters">
       <label class="ctl"><span>Peildatum</span><input id="refdate" type="date"></label>
-      <div class="ctl"><span>Methode</span>
-        <div class="pills" role="group" aria-label="Methode">
-          <button class="mode-btn" id="m-excel" aria-pressed="true">Zoals Excel</button>
-          <button class="mode-btn" id="m-strict" aria-pressed="false">Strikt</button>
-          <button class="mode-btn" id="m-custom" aria-pressed="false" disabled>Aangepast</button>
+      <div class="ctl"><span>Tonen</span>
+        <div class="pills" role="group" aria-label="Tonen">
+          <button class="mode-btn" id="s-current">Lopende allocaties</button>
+          <button class="mode-btn" id="s-all">Alle allocaties</button>
         </div>
       </div>
       <div class="ctl"><span>Kerncijfers</span>
         <div class="pills" role="group" aria-label="Pensioen">
-          <button class="mode-btn" id="p-inc" aria-pressed="true">Incl. pensioen</button>
-          <button class="mode-btn" id="p-exc" aria-pressed="false">Excl. pensioen</button>
+          <button class="mode-btn" id="p-inc">Incl. pensioen</button>
+          <button class="mode-btn" id="p-exc">Excl. pensioen</button>
         </div>
       </div>
-      <div style="flex:1"></div>
-      <div class="pills">
-        <label class="btn" for="file" tabindex="0" id="fileBtn">Workbook importeren</label>
-        <input id="file" type="file" accept=".xlsx,.xlsm" hidden>
-        <button class="btn btn-quiet" id="add">Consultant toevoegen</button>
-        <button class="btn btn-quiet" id="reset">Voorbeeld laden</button>
+      <div class="ctl"><span>Methode</span>
+        <div class="pills" role="group" aria-label="Methode">
+          <button class="mode-btn" id="m-excel">Zoals Excel</button>
+          <button class="mode-btn" id="m-strict">Strikt</button>
+          <a class="mode-btn" id="m-custom" href="instellingen.html#methode" hidden>Aangepast</a>
+        </div>
       </div>
     </div>
 
@@ -241,177 +72,29 @@
     </section>
 
     <section class="panel">
-      <div class="panel-head"><h2>Allocaties</h2><span class="hint">Grootste tekort bovenaan · klik op een regel voor de berekening</span></div>
+      <div class="panel-head"><h2>Consultant × project</h2><span class="hint">Grootste tekort bovenaan · klik op een regel voor de berekening</span></div>
       <div class="scroll"><table id="allocs"></table></div>
     </section>
 
-    <details class="panel" id="assumptions">
-      <summary><svg class="chev" viewBox="0 0 10 10" fill="none"><path d="M3 1.5L6.5 5L3 8.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Aannames en methode</summary>
-      <div class="aannames" id="assume"></div>
-    </details>
-
-    <footer>
-      Pakket bij de klant: cao-schaal op een vaste positie, plus vakantiegeld, eindejaarsuitkering, IKB, bovenwettelijk verlof, reiskosten en thuiswerkvergoeding uit de cao. Pakket bij Profource: salaris en vakantiegeld uit AFAS, een aangenomen bonus, leaseauto of mobiliteitsbudget, extra verlof en vaste vergoedingen. De pensioencompensatie geldt als de werkgeverspremie bij de klant meer waard is. Geïmporteerde gegevens blijven in deze browser en worden nergens naartoe gestuurd. Dit is een signaleringsinstrument: laat de methode door juridische zaken bevestigen voordat je op de uitkomsten handelt.
-    </footer>
+    <footer>Geïmporteerde gegevens blijven in deze browser en worden nergens naartoe gestuurd. Dit is een signaleringsinstrument: laat de methode door juridische zaken bevestigen voordat je op de uitkomsten handelt.</footer>
   </main>
 </div>
 
 <script>
-"use strict";
-const LEVELS = [
-  { code: "TRA", name: "Trainee", mob: 480, train: 2388 },
-  { code: "JUN", name: "Junior", mob: 480, train: 1380 },
-  { code: "MED", name: "Medior", mob: 700, train: 360 },
-  { code: "SPC", name: "Specialist", mob: 840, train: 0 },
-  { code: "SEN", name: "Senior", mob: 1015, train: 0 },
-  { code: "PRI", name: "Principal", mob: 1015, train: 0 },
-  { code: "MAN", name: "Managing Principal", mob: 1015, train: 0 },
-];
-const DEFAULTS = {
-  scalePos: 0.13, commuteKm: 40, commuteDays: 10, bonusPct: 0.5, extraLeaveDays: 6,
-  homeAllow: 24, internet: 15, misc: 79, manager: 232.5, leftoverPct: 0.35, vat: 0.21,
-  pfPensionPct: 0.159, pfFranchise: 1601.6, pensionFactor: 0.853, legalLeaveH: 160, burden: 0,
-  levels: LEVELS,
-};
-const PRESETS = {
-  excel:  { leaveNorm: false, noManager: false, noTraining: false, leaseExVat: false, pensionTwoSided: false },
-  strict: { leaveNorm: true,  noManager: true,  noTraining: true,  leaseExVat: true,  pensionTwoSided: false },
-};
-const TOGGLES = [
-  ["leaveNorm", "Bovenwettelijk verlof rekenen met de werkweek uit de cao", "De Excel vergelijkt verlofuren met 160 uur (40-urige werkweek), ook bij een cao van 36 uur. Daardoor worden extra verlofdagen bij de klant te laag geteld."],
-  ["noManager", "Kosten teammanager niet meetellen", "Dat is een kostenpost van Profource, geen beloning die de consultant ontvangt."],
-  ["noTraining", "Opleidingskosten Profource niet meetellen", "Aan de kant van de klant staat geen opleidingsbudget, dus alleen aan één kant meetellen vertekent de uitkomst."],
-  ["leaseExVat", "Leaseauto en mobiliteitsbudget exclusief btw rekenen", "De Excel rekent ze inclusief 21% btw."],
-  ["pensionTwoSided", "Profource meetellen als haar pensioen meer waard is", "De Excel corrigeert alleen als het pensioen bij de klant beter is."],
-];
-// Fictieve voorbeeldregels. Voorbeeld B gebruikt dezelfde invoer als de tweede rij in de oorspronkelijke Excel, zodat "Zoals Excel" dezelfde uitkomst geeft.
-const EXAMPLE = [
-  { id: "ex1", example: true, name: "Voorbeeld A", pfid: "", project: "900001", projectName: "Rijksoverheid – medewerker operations inkoop", client: "Voorbeeldministerie", cao: 19, version: "", scale: "8", scalePos: null, level: "JUN", pt: 0.9, assign: 1, salary: 4650, holidayFT: 330.67, car: null, notes: [] },
-  { id: "ex2", example: true, name: "Voorbeeld B", pfid: "", project: "900002", projectName: "Gemeente – financieel administratief medewerker", client: "Voorbeeldgemeente", cao: 10, version: "", scale: "7", scalePos: null, level: "JUN", pt: 1, assign: 1, salary: 3000, holidayFT: 240, car: 637.28, notes: [] },
-];
-const clone = (o) => JSON.parse(JSON.stringify(o));
-const STORE = "maatman-v1";
+let openId = null;
 
-// ---------- state ----------
-let state = load() || fresh();
-let selected = null;
-function fresh() { return { rows: clone(EXAMPLE), settings: clone(DEFAULTS), method: "excel", toggles: { ...PRESETS.excel }, refDate: todayISO(), pension: "inc", scales: null, importInfo: null }; }
-function load() { try { const s = JSON.parse(localStorage.getItem(STORE) || "null"); if (s && Array.isArray(s.rows)) { s.settings = { ...clone(DEFAULTS), ...s.settings }; return s; } } catch (e) {} return null; }
-function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
-function todayISO() { return new Date().toISOString().slice(0, 10); }
-
-// ---------- helpers ----------
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const eur0 = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
-const eur2 = new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const pct = (v) => (v * 100).toLocaleString("nl-NL", { maximumFractionDigits: 2 }) + "%";
-const nl = (v, d = 2) => Number(v).toLocaleString("nl-NL", { maximumFractionDigits: d });
-function signed(v, f = eur0) { if (v == null || isNaN(v)) return "–"; const r = Math.round(v * 100) / 100; return (r > 0 ? "+" : r < 0 ? "−" : "") + f.format(Math.abs(v)); }
-function num(v) { if (v == null || v === "") return null; if (typeof v === "number") return isFinite(v) ? v : null; let t = String(v).trim(); if (t.includes(",")) t = t.replace(/\./g, "").replace(",", "."); const n = parseFloat(t); return isNaN(n) ? null : n; }
-function toDate(v) {
-  if (v == null || v === "") return null;
-  if (v instanceof Date) return v;
-  if (typeof v === "number") return new Date(Date.UTC(1899, 11, 30) + v * 864e5);
-  const m = String(v).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
-  const d = new Date(v); return isNaN(d) ? null : d;
-}
-const fmtDate = (d) => d ? d.toISOString().slice(0, 10).split("-").reverse().join("-") : "";
-const refDate = () => new Date(state.refDate + "T00:00:00Z");
-const scales = () => state.scales || EMBEDDED_SCALES;
-function caoList() { const m = new Map(); for (const s of scales()) if (!m.has(s.c)) m.set(s.c, s.cao || ("Cao " + s.c)); return [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), "nl")); }
-function caoName(code) { const s = scales().find((x) => x.c == code); return s ? (s.cao || "Cao " + code) : "Cao " + code; }
-const vnum = (v) => parseInt(String(v).replace(/\D/g, "")) || 0;
-function versionsFor(code) { return [...new Set(scales().filter((s) => s.c == code).map((s) => s.v))].sort((a, b) => vnum(a) - vnum(b)); }
-function pickVersion(code, ref) {
-  const rows = scales().filter((s) => s.c == code); if (!rows.length) return null;
-  const vs = [...new Set(rows.map((s) => s.v))].sort((a, b) => vnum(b) - vnum(a));
-  const valid = vs.filter((v) => { const r = rows.find((s) => s.v === v); const a = toDate(r.from), b = toDate(r.to); return a && b && a <= ref && ref <= b; });
-  if (valid.length) return valid[0];
-  const act = vs.filter((v) => rows.some((s) => s.v === v && s.act === 1)); if (act.length) return act[0];
-  return vs[0];
-}
-function scalesFor(code, v) { return scales().filter((s) => s.c == code && s.v === v); }
-function findScale(row, ref) { const v = row.version || pickVersion(row.cao, ref); if (!v) return { v: null, s: null }; return { v, s: scalesFor(row.cao, v).find((s) => String(s.s) === String(row.scale)) || null }; }
-const level = (code) => state.settings.levels.find((l) => l.code === code);
-
-// ---------- berekening (volgt de Excel-kolommen; de schakelaars zetten de correcties aan) ----------
-function calc(row) {
-  const S = state.settings, T = state.toggles;
-  const { v, s } = findScale(row, refDate());
-  const out = { version: v, scale: s, client: [], pf: [], issues: [], w: (row.pt ?? 1) * (row.assign ?? 1) };
-  if (!s) { out.issues.push(`Geen cao-schaal gevonden voor ${caoName(row.cao)} schaal ${row.scale}${v ? " (" + v + ")" : ""}.`); return out; }
-  const lv = level(row.level); if (!lv) out.issues.push("Functieniveau onbekend, dus mobiliteitsbudget en opleidingen ontbreken.");
-  if (row.salary == null) out.issues.push("Geen salaris bij Profource bekend.");
-  const pos = row.scalePos ?? S.scalePos;
-  const U = s.min + (s.max - s.min) * pos;
-  const hrs = s.hrs || 40;
-  const extraDays = T.leaveNorm ? Math.max(0, ((s.leaveH || 0) - 4 * hrs) / (hrs / 5)) : Math.max(0, ((s.leaveH || 0) - S.legalLeaveH) / 8);
-  const dayV = s.dayV ?? 0.00385;
-  const AQ = (s.vak || 0) * U, AF = (s.eju || 0) * U, AH = (s.ikb || 0) * U;
-  const budgetTxt = s.budget && !["nvt", "0", 0].includes(s.budget) ? "Niet meegeteld: " + s.budget : "";
-  out.client = [
-    ["Basissalaris", U, `Schaal ${s.s}: ${eur0.format(s.min)}–${eur0.format(s.max)} (40 uur), op ${pct(pos)}`],
-    ["Vakantiegeld", AQ, pct(s.vak || 0)],
-    ["Eindejaarsuitkering", AF, pct(s.eju || 0)],
-    ["IKB-budget", AH, pct(s.ikb || 0)],
-    ["Bovenwettelijk verlof", extraDays * dayV * U, `${nl(extraDays, 1)} dagen × ${pct(dayV)} van het salaris`],
-    ["Reiskosten woon-werk", (s.km || 0) * S.commuteKm * 2 * S.commuteDays, `€ ${nl(s.km || 0)}/km × ${nl(S.commuteKm)} km × 2 × ${nl(S.commuteDays)} dagen`],
-    ["Thuiswerk + internet", s.home || 0, ""],
-    ["Overige cao-elementen", s.other || 0, budgetTxt],
-  ];
-  const V = row.salary || 0;
-  const AS = row.holidayFT ?? V * 0.08;
-  const budget = lv ? lv.mob : 0;
-  const carGross = row.car != null ? row.car : budget * (1 + S.vat);
-  const Z = T.leaseExVat ? carGross / (1 + S.vat) : carGross;
-  const AA = carGross / (1 + S.vat) < budget ? (budget - carGross / (1 + S.vat)) * S.leftoverPct : 0;
-  const W = V * S.bonusPct / 12;
-  out.pf = [
-    ["Salaris (fulltime)", V, "Uit AFAS"],
-    ["Vakantiegeld", AS, row.holidayFT == null ? "8% aangenomen" : "Uit AFAS"],
-    ["Bonus", W, `${pct(S.bonusPct)} van een maandsalaris per jaar`],
-    [row.car != null ? "Leaseauto" : "Mobiliteitsbudget", Z, (row.car != null ? "" : (lv ? "Budget " + lv.name + ", " : "")) + (T.leaseExVat ? "excl. btw" : "incl. btw")],
-    ["Resterend mobiliteitsbudget", AA, `${pct(S.leftoverPct)} van wat overblijft`],
-    ["Extra verlofdagen", V * dayV * S.extraLeaveDays, `${nl(S.extraLeaveDays)} dagen × ${pct(dayV)} van het salaris`],
-    ["Thuiswerkvergoeding", S.homeAllow, ""],
-    ["Internetvergoeding", S.internet, ""],
-    ["Diversen", S.misc, ""],
-    ["Teammanager", T.noManager ? 0 : S.manager, T.noManager ? "Niet meegeteld" : "", T.noManager],
-    ["Opleidingen", T.noTraining || !lv ? 0 : lv.train / 12, T.noTraining ? "Niet meegeteld" : lv ? `${eur0.format(lv.train)} per jaar` : "", T.noTraining],
-  ];
-  out.clientTotal = out.client.reduce((a, l) => a + l[1], 0);
-  out.pfTotal = out.pf.reduce((a, l) => a + l[1], 0);
-  const base = (s.fSal === 1 ? U : 0) + (s.fVak === 1 ? AQ : 0) + (s.fEju === 1 ? AF : 0) + (s.fToe === 1 ? AH : 0);
-  out.penClient = (base - (s.fran || 0)) * (s.pen || 0);
-  out.penPf = (V + AS + W - S.pfFranchise) * S.pfPensionPct;
-  out.penText = s.penTxt || "";
-  let gap = out.penClient - out.penPf; if (!T.pensionTwoSided) gap = Math.max(0, gap);
-  out.penComp = gap * S.pensionFactor;
-  out.diffEx = out.pfTotal - out.clientTotal;
-  out.diffInc = out.diffEx - out.penComp;
-  out.wEx = out.diffEx * out.w; out.wInc = out.diffInc * out.w;
-  out.ok = row.salary != null && !!lv;
-  return out;
-}
-const head = (c) => state.pension === "inc" ? c.wInc : c.wEx;
-
-// ---------- weergave ----------
+function visible() { return state.allocations.filter((a) => state.showAll || isCurrent(a)); }
 function render() {
-  save();
   $("refdate").value = state.refDate;
-  for (const m of ["excel", "strict", "custom"]) $("m-" + m).setAttribute("aria-pressed", state.method === m);
-  $("p-inc").setAttribute("aria-pressed", state.pension === "inc");
-  $("p-exc").setAttribute("aria-pressed", state.pension === "exc");
-  const items = state.rows.map((r) => ({ r, c: calc(r) }));
-  const n = $("notice"); n.classList.remove("err");
-  if (state.rows.some((r) => r.example)) { n.hidden = false; n.textContent = "Je ziet twee fictieve voorbeeldregels. Importeer het MaatMan-workbook om met echte gegevens te rekenen."; }
-  else if (state.importInfo) { n.hidden = false; n.textContent = state.importInfo; }
-  else n.hidden = true;
-  renderCards(items); renderProjects(items); renderAllocs(items); renderAssumptions();
+  const pressed = (id, on) => $(id).setAttribute("aria-pressed", on);
+  pressed("s-current", !state.showAll); pressed("s-all", state.showAll);
+  pressed("p-inc", state.pension === "inc"); pressed("p-exc", state.pension === "exc");
+  pressed("m-excel", state.method === "excel"); pressed("m-strict", state.method === "strict");
+  $("m-custom").hidden = state.method !== "custom"; $("m-custom").setAttribute("aria-pressed", "true");
+  dataNotice();
+  const items = visible().map((a) => ({ a, cons: consultant(a.consultantId), proj: project(a.projectId), c: calc(allocInput(a)) }));
+  renderCards(items); renderProjects(items); renderAllocs(items);
 }
-function notice(msg) { const n = $("notice"); n.hidden = false; n.classList.add("err"); n.textContent = msg; }
-function status(c) { if (!c.scale || !c.ok) return ["chk", "Data controleren"]; return head(c) < -0.5 ? ["gap", "Onder klantniveau"] : ["ok", "In orde"]; }
 function renderCards(items) {
   const valid = items.filter((i) => i.c.scale);
   const below = valid.filter((i) => head(i.c) < -0.5);
@@ -420,258 +103,81 @@ function renderCards(items) {
   const yr = short * 12 * (1 + state.settings.burden);
   const bad = below.length ? "bad" : "good";
   $("cards").innerHTML = `
-    <div class="card accent"><div class="label">Allocaties</div><div class="value">${items.length}</div><div class="sub">${chk ? `${chk} met gegevens om te controleren` : "Alle gegevens compleet"}</div></div>
-    <div class="card ${bad}"><div class="label">Onder klantniveau</div><div class="value">${below.length}</div><div class="sub">${state.pension === "inc" ? "Inclusief" : "Exclusief"} pensioen</div></div>
+    <div class="card accent"><div class="label">${state.showAll ? "Allocaties" : "Lopende allocaties"}</div><div class="value">${items.length}</div><div class="sub">${chk ? `${chk} met gegevens om te controleren` : "Alle gegevens compleet"}</div></div>
+    <div class="card ${bad}"><div class="label">Onder klantniveau</div><div class="value">${below.length}</div><div class="sub">${state.pension === "inc" ? "Inclusief" : "Exclusief"} pensioen · ${methodLabel()}</div></div>
     <div class="card ${bad}"><div class="label">Tekort per maand</div><div class="value">${eur0.format(short)}</div><div class="sub">Gewogen naar inzet</div></div>
     <div class="card ${bad}"><div class="label">Kosten om te dichten</div><div class="value">${eur0.format(yr)}</div><div class="sub">Per jaar${state.settings.burden ? `, +${pct(state.settings.burden)} werkgeverslasten` : ", bruto"}</div></div>`;
 }
 function renderProjects(items) {
   const g = new Map();
-  for (const i of items) { const k = i.r.project || "(geen project)"; if (!g.has(k)) g.set(k, []); g.get(k).push(i); }
-  const rows = [...g.entries()].map(([k, list]) => {
+  for (const i of items) { const k = i.a.projectId; if (!g.has(k)) g.set(k, []); g.get(k).push(i); }
+  const rows = [...g.values()].map((list) => {
     const ok = list.filter((i) => i.c.scale);
-    const total = ok.reduce((a, i) => a + head(i.c), 0);
     const neg = ok.filter((i) => head(i.c) < -0.5);
-    return { k, list, total, short: neg.reduce((a, i) => a + head(i.c), 0), below: neg.length };
+    return { proj: list[0].proj, list, total: ok.reduce((a, i) => a + head(i.c), 0), short: neg.reduce((a, i) => a + head(i.c), 0), below: neg.length };
   }).sort((a, b) => a.short - b.short || a.total - b.total);
-  if (!rows.length) { $("projects").innerHTML = `<tbody><tr><td class="empty-state">Nog geen allocaties. Importeer een workbook of voeg een consultant toe.</td></tr></tbody>`; return; }
-  $("projects").innerHTML = `<thead><tr><th>Project</th><th>Klant</th><th class="r">Consultants</th><th class="r">Onder klantniveau</th><th class="r">Netto verschil / maand</th><th class="r">Tekort / jaar</th></tr></thead><tbody>` +
-    rows.map((p) => `<tr><td><span class="naam tnum">${esc(p.k)}</span><div class="klein">${esc(p.list[0].r.projectName || "")}</div></td><td>${esc(p.list[0].r.client || "")}</td><td class="r tnum">${p.list.length}</td><td class="r">${p.below ? `<span class="status gap">${p.below}</span>` : '<span class="tnum">0</span>'}</td><td class="r tnum ${p.total < 0 ? "neg" : "pos"}">${signed(p.total)}</td><td class="r tnum ${p.short < 0 ? "neg" : ""}">${p.short < 0 ? eur0.format(-p.short * 12 * (1 + state.settings.burden)) : "–"}</td></tr>`).join("") + "</tbody>";
+  if (!rows.length) { $("projects").innerHTML = `<tbody><tr><td class="empty-state">Geen ${state.showAll ? "" : "lopende "}allocaties. Importeer het workbook of voeg allocaties toe via <a href="instellingen.html">Instellingen</a>.</td></tr></tbody>`; return; }
+  $("projects").innerHTML = `<thead><tr><th>Project</th><th>Klant</th><th>Cao · schaal</th><th class="r">Consultants</th><th class="r">Onder klantniveau</th><th class="r">Netto verschil / maand</th><th class="r">Tekort / jaar</th></tr></thead><tbody>` +
+    rows.map((p) => `<tr><td><span class="naam tnum">${esc(p.proj ? p.proj.number : "–")}</span><div class="klein">${esc(p.proj ? p.proj.name : "")}</div></td><td>${esc(p.proj ? p.proj.client : "")}</td><td>${p.proj ? esc(caoName(p.proj.cao)) + `<div class="klein">schaal ${esc(p.proj.scale)}</div>` : "–"}</td><td class="r tnum">${p.list.length}</td><td class="r">${p.below ? `<span class="status gap">${p.below}</span>` : '<span class="tnum">0</span>'}</td>${diffCell(p.total)}<td class="r tnum ${p.short < 0 ? "neg" : ""}">${p.short < 0 ? eur0.format(-p.short * 12 * (1 + state.settings.burden)) : "–"}</td></tr>`).join("") + "</tbody>";
 }
-const CHEV = '<svg class="chev" viewBox="0 0 10 10" fill="none"><path d="M3 1.5L6.5 5L3 8.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function renderAllocs(items) {
-  const focusId = document.activeElement && document.activeElement.closest && document.activeElement.closest(".form-col") ? document.activeElement.id : null;
   if (!items.length) { $("allocs").innerHTML = `<tbody><tr><td class="empty-state">Niets om te tonen.</td></tr></tbody>`; return; }
   const key = (i) => i.c.scale ? head(i.c) : -1e9;
   const sorted = [...items].sort((a, b) => key(a) - key(b));
   $("allocs").innerHTML = `<thead><tr><th style="width:24px"></th><th>Status</th><th>Consultant</th><th>Project</th><th>Cao · schaal</th><th class="r">Inzet</th><th class="r">Pakket klant</th><th class="r">Pakket Profource</th><th class="r">Verschil excl. pensioen</th><th class="r">Verschil incl. pensioen</th></tr></thead><tbody>` +
-    sorted.map(({ r, c }) => { const [cls, txt] = status(c); const has = !!c.scale; const open = selected === r.id; return `<tr class="rij ${open ? "open" : ""}" data-id="${esc(r.id)}" tabindex="0" aria-expanded="${open}">
-      <td>${CHEV}</td>
-      <td><span class="status ${cls}">${txt}</span></td>
-      <td><span class="naam">${esc(r.name || "Naamloos")}</span>${r.example ? '<span class="tag">voorbeeld</span>' : ""}<div class="klein tnum">${esc(r.pfid || "")}</div></td>
-      <td><span class="tnum">${esc(r.project || "")}</span><div class="klein">${esc(r.client || "")}</div></td>
-      <td>${esc(caoName(r.cao))}<div class="klein">schaal ${esc(r.scale)} · ${esc(c.version || "–")}</div></td>
-      <td class="r tnum">${pct(c.w)}</td>
-      <td class="r tnum">${has ? eur0.format(c.clientTotal) : "–"}</td>
-      <td class="r tnum">${has ? eur0.format(c.pfTotal) : "–"}</td>
-      <td class="r tnum ${has ? (c.wEx < 0 ? "neg" : "pos") : ""}">${has ? signed(c.wEx) : "–"}</td>
-      <td class="r tnum ${has ? (c.wInc < 0 ? "neg" : "pos") : ""}">${has ? signed(c.wInc) : "–"}</td></tr>` + (open ? `<tr class="detail"><td colspan="10">${detailHTML(r, c)}</td></tr>` : ""); }).join("") + "</tbody>";
+    sorted.map(({ a, cons, proj, c }) => {
+      let [cls, txt] = status(c); if (!isCurrent(a)) { cls = "off"; txt = "Afgelopen"; }
+      const has = !!c.scale, isOpen = openId === a.id;
+      return `<tr class="rij ${isOpen ? "open" : ""}" data-id="${esc(a.id)}" tabindex="0" aria-expanded="${isOpen}">
+        <td>${CHEV}</td>
+        <td><span class="status ${cls}">${txt}</span></td>
+        <td><span class="naam">${esc(cons ? cons.name : "Onbekend")}</span>${state.example ? '<span class="tag">voorbeeld</span>' : ""}<div class="klein tnum">${esc(cons ? cons.pfid : "")}</div></td>
+        <td><span class="tnum">${esc(proj ? proj.number : "–")}</span><div class="klein">${esc(proj ? proj.client : "")}</div></td>
+        <td>${esc(caoName(proj ? proj.cao : null))}<div class="klein">schaal ${esc(a.scale || (proj && proj.scale) || "–")} · ${esc(c.version || "–")}</div></td>
+        <td class="r tnum">${pct(c.w)}</td>
+        <td class="r tnum">${has ? eur0.format(c.clientTotal) : "–"}</td>
+        <td class="r tnum">${has ? eur0.format(c.pfTotal) : "–"}</td>
+        ${diffCell(c.wEx, has)}${diffCell(c.wInc, has)}</tr>` +
+        (isOpen ? `<tr class="detail"><td colspan="10">${detailHTML(a, cons, proj, c)}</td></tr>` : "");
+    }).join("") + "</tbody>";
   fitDetail();
-  if (focusId && $(focusId)) $(focusId).focus();
 }
-// The open detail row spans the whole table; pin it to the visible width so it never makes the table scroll sideways.
+function detailHTML(a, cons, proj, c) {
+  const inp = allocInput(a);
+  const facts = [
+    ["Consultant", cons ? cons.name : "–"], ["Functieniveau", (level(inp.level) || {}).name || "–"],
+    ["Parttime", pct(inp.pt)], ["Opdracht", pct(inp.assign)],
+    ["Salaris fulltime", inp.salary == null ? "–" : eur2.format(inp.salary)], ["Leaseauto", inp.car == null ? "Geen (mobiliteitsbudget)" : eur2.format(inp.car)],
+    ["Project", proj ? proj.number : "–"], ["Klant", proj ? proj.client : "–"],
+    ["Looptijd", (a.start || a.end) ? `${a.start ? fmtDate(a.start) : "…"} t/m ${a.end ? fmtDate(a.end) : "…"}` : "Onbekend"],
+  ];
+  const notes = [...(cons ? cons.notes || [] : []), ...(a.notes || [])];
+  return `<div class="detail-inner">
+    <div class="form-col">
+      ${facts.map(([k, v]) => `<div class="fld"><span class="field-label">${k}</span><span>${esc(v)}</span></div>`).join("")}
+      <div class="form-actions">
+        <a class="btn" href="calculator.html?consultant=${encodeURIComponent(a.consultantId)}&project=${encodeURIComponent(a.projectId)}">Openen in calculator</a>
+        <a class="btn btn-quiet" href="instellingen.html#allocaties">Bewerken</a>
+      </div>
+    </div>
+    <div class="calc-col">${breakdownHTML(c, proj ? proj.cao : null, notes)}</div>
+  </div>`;
+}
 function fitDetail() { const d = document.querySelector(".detail-inner"); if (d) d.style.width = $("allocs").parentElement.clientWidth + "px"; }
 window.addEventListener("resize", fitDetail);
-function field(label, id, value, type = "text", extra = "") { return `<label class="fld"><span class="field-label">${label}</span><input id="${id}" type="${type}" value="${esc(value ?? "")}" ${extra}></label>`; }
-function detailHTML(r, c) {
-  const autoV = pickVersion(r.cao, refDate());
-  const vOpts = `<option value="">Automatisch (${esc(autoV || "–")})</option>` + versionsFor(r.cao).map((v) => `<option ${v === r.version ? "selected" : ""}>${esc(v)}</option>`).join("");
-  const sc = scalesFor(r.cao, r.version || autoV);
-  const sOpts = sc.map((s) => `<option value="${esc(s.s)}" ${String(s.s) === String(r.scale) ? "selected" : ""}>${esc(s.s)}</option>`).join("") + (sc.some((s) => String(s.s) === String(r.scale)) ? "" : `<option selected value="${esc(r.scale)}">${esc(r.scale)} (niet gevonden)</option>`);
-  const p100 = (v) => v == null ? "" : +(v * 100).toFixed(2);
-  const form = `<div class="form-col" id="dForm">
-    ${field("Naam", "f-name", r.name)}
-    <div class="grid2">${field("Personeelsnr.", "f-pfid", r.pfid)}${field("Projectnr.", "f-project", r.project)}</div>
-    ${field("Klant", "f-client", r.client)}
-    <label class="fld"><span class="field-label">Cao van de klant</span><select id="f-cao">${caoList().map(([k, n]) => `<option value="${k}" ${k == r.cao ? "selected" : ""}>${esc(n)} (${k})</option>`).join("")}</select></label>
-    <div class="grid2"><label class="fld"><span class="field-label">Cao-versie</span><select id="f-version">${vOpts}</select></label><label class="fld"><span class="field-label">Schaal</span><select id="f-scale">${sOpts}</select></label></div>
-    <div class="grid2">${field("Positie in schaal %", "f-pos", p100(r.scalePos), "number", `step="1" placeholder="${nl(state.settings.scalePos * 100)} (standaard)"`)}
-    <label class="fld"><span class="field-label">Functieniveau</span><select id="f-level"><option value="">–</option>${state.settings.levels.map((l) => `<option value="${l.code}" ${l.code === r.level ? "selected" : ""}>${esc(l.name)}</option>`).join("")}</select></label></div>
-    <div class="grid2">${field("Parttime %", "f-pt", p100(r.pt), "number", 'step="5"')}${field("Opdracht %", "f-assign", p100(r.assign), "number", 'step="5"')}</div>
-    <div class="grid2">${field("Salaris fulltime / mnd", "f-salary", r.salary, "number", 'step="10"')}${field("Vakantiegeld fulltime / mnd", "f-holiday", r.holidayFT == null ? "" : +r.holidayFT.toFixed(2), "number", 'step="1" placeholder="8% van salaris"')}</div>
-    ${field("Leaseauto / mnd incl. btw", "f-car", r.car, "number", 'step="1" placeholder="Leeg: mobiliteitsbudget"')}
-    <div class="form-actions"><button class="btn btn-quiet" data-act="close">Sluiten</button><button class="btn btn-danger" data-act="delete">Verwijderen</button></div>
-  </div>`;
-  const notes = [...(r.notes || []), ...c.issues];
-  let calcH = notes.length ? `<ul class="meldingen">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : "";
-  if (c.scale) {
-    const tbl = (title, lines, total) => `<div class="box"><h3>${title}</h3><table><tbody>${lines.map(([k, v, note, off]) => `<tr><td>${esc(k)}${note ? `<div class="klein">${esc(note)}</div>` : ""}</td><td class="r tnum ${off ? "uit" : ""}">${eur2.format(v)}</td></tr>`).join("")}<tr class="tot"><td>Totaal per maand</td><td class="r tnum">${eur2.format(total)}</td></tr></tbody></table></div>`;
-    calcH += `<div class="vgl">${tbl("Bij de klant · " + esc(caoName(r.cao)) + " " + esc(c.version), c.client, c.clientTotal)}${tbl("Bij Profource", c.pf, c.pfTotal)}</div>
-      <div class="box"><h3>Pensioen</h3><table><tbody>
-        <tr><td>Werkgeverspremie klant<div class="klein">${pct(c.scale.pen || 0)} over pensioengevend loon min franchise ${eur0.format(c.scale.fran || 0)}${c.penText ? " · " + esc(c.penText) : ""}</div></td><td class="r tnum">${eur2.format(c.penClient)}</td></tr>
-        <tr><td>Werkgeverspremie Profource<div class="klein">${pct(state.settings.pfPensionPct)} over salaris, vakantiegeld en bonus min ${eur0.format(state.settings.pfFranchise)}</div></td><td class="r tnum">${eur2.format(c.penPf)}</td></tr>
-        <tr class="tot"><td>Pensioencompensatie<div class="klein" style="font-weight:400">${state.toggles.pensionTwoSided ? "Verschil" : "Alleen voordeel klant"} × ${nl(state.settings.pensionFactor, 3)}</div></td><td class="r tnum">${eur2.format(c.penComp)}</td></tr>
-      </tbody></table></div>
-      <div class="uitkomst">
-        <div class="box"><h3>Verschil excl. pensioen</h3><div class="big ${c.diffEx < 0 ? "neg" : "pos"}">${signed(c.diffEx, eur2)}</div><div class="klein">Fulltime · gewogen naar ${pct(c.w)}: <span class="tnum">${signed(c.wEx, eur2)}</span></div></div>
-        <div class="box"><h3>Verschil incl. pensioen</h3><div class="big ${c.diffInc < 0 ? "neg" : "pos"}">${signed(c.diffInc, eur2)}</div><div class="klein">Fulltime · gewogen naar ${pct(c.w)}: <span class="tnum">${signed(c.wInc, eur2)}</span></div></div>
-      </div>`;
-  }
-  return `<div class="detail-inner">${form}<div class="calc-col">${calcH}</div></div>`;
-}
-function renderAssumptions() {
-  const box = $("assume");
-  const sig = JSON.stringify([state.toggles, state.settings, !!state.scales]);
-  if (box.dataset.sig === sig) return;
-  const S = state.settings;
-  const n = (label, key, scale = 1) => `<label class="fld"><span class="field-label">${label}</span><input type="number" step="any" id="s-${key}" data-set="${key}" data-scale="${scale}" value="${+(S[key] * scale).toFixed(4)}"></label>`;
-  box.innerHTML = `
-    <div><h3>Methodekeuzes</h3><div style="display:flex;flex-direction:column;gap:12px;margin-top:10px">${TOGGLES.map(([k, l, why]) => `<label class="check"><input type="checkbox" id="t-${k}" data-tog="${k}" ${state.toggles[k] ? "checked" : ""}><span>${l}<div class="klein">${why}</div></span></label>`).join("")}</div></div>
-    <div><h3>Kant van de klant</h3><div class="row">${n("Positie in schaal %", "scalePos", 100)}${n("Woon-werkafstand km (enkel)", "commuteKm")}${n("Reisdagen per maand", "commuteDays")}${n("Wettelijke verlofuren (Excel-methode)", "legalLeaveH")}</div></div>
-    <div><h3>Kant van Profource</h3><div class="row">${n("Bonus, % maandsalaris / jaar", "bonusPct", 100)}${n("Extra verlofdagen", "extraLeaveDays")}${n("Thuiswerkvergoeding / mnd", "homeAllow")}${n("Internetvergoeding / mnd", "internet")}${n("Diversen / mnd", "misc")}${n("Teammanager / mnd", "manager")}${n("Resterend mobiliteitsbudget %", "leftoverPct", 100)}${n("Btw %", "vat", 100)}</div></div>
-    <div><h3>Pensioen en kosten</h3><div class="row">${n("Premie Profource %", "pfPensionPct", 100)}${n("Franchise Profource / mnd", "pfFranchise")}${n("Factor pensioencompensatie", "pensionFactor")}${n("Werkgeverslasten op tekort %", "burden", 100)}</div></div>
-    <div><h3>Functieniveaus</h3><div class="scroll levels" style="margin-top:10px;border:1px solid var(--border);border-radius:10px"><table><thead><tr><th>Niveau</th><th class="r">Mobiliteitsbudget / mnd excl. btw</th><th class="r">Opleidingen / jaar</th></tr></thead><tbody>${S.levels.map((l, i) => `<tr><td>${esc(l.name)}</td><td class="r"><input type="number" id="l-${i}-mob" data-lvl="${i}" data-k="mob" value="${l.mob}"></td><td class="r"><input type="number" id="l-${i}-train" data-lvl="${i}" data-k="train" value="${l.train}"></td></tr>`).join("")}</tbody></table></div></div>
-    <p class="klein" style="margin:0">Cao-schalen: ${state.scales ? "uit je geïmporteerde workbook" : "ingebouwd, uit het MaatMan-workbook van 22-07-2026"} (${scales().length} schalen met een minimum en maximum). De cao-versie wordt automatisch gekozen: de hoogste versie waarvan de looptijd de peildatum bevat, anders de versie die als actief is gemarkeerd. Per allocatie kun je een andere versie kiezen.</p>
-    <div><button class="btn btn-quiet" id="resetSettings">Aannames terugzetten</button></div>`;
-  box.dataset.sig = sig;
-}
 
-// ---------- interactie ----------
-function toggleRow(id) { selected = selected === id ? null : id; render(); }
-document.addEventListener("click", (e) => {
-  const act = e.target.closest("[data-act]");
-  if (act) {
-    if (act.dataset.act === "close") selected = null;
-    if (act.dataset.act === "delete") { state.rows = state.rows.filter((r) => r.id !== selected); selected = null; }
-    render(); return;
-  }
-  const tr = e.target.closest("tr.rij"); if (tr) toggleRow(tr.dataset.id);
-  if (e.target.id === "resetSettings") { state.settings = clone(DEFAULTS); render(); }
-});
-document.addEventListener("keydown", (e) => {
-  if (e.target.matches && e.target.matches("tr.rij") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleRow(e.target.dataset.id); }
-  if (e.target.id === "fileBtn" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); $("file").click(); }
-});
-$("refdate").addEventListener("change", (e) => { if (e.target.value) { state.refDate = e.target.value; render(); } });
-$("m-excel").onclick = () => { state.method = "excel"; state.toggles = { ...PRESETS.excel }; render(); };
-$("m-strict").onclick = () => { state.method = "strict"; state.toggles = { ...PRESETS.strict }; render(); };
-$("p-inc").onclick = () => { state.pension = "inc"; render(); };
-$("p-exc").onclick = () => { state.pension = "exc"; render(); };
-$("add").onclick = () => {
-  const id = "r" + Date.now();
-  state.rows = state.rows.filter((r) => !r.example);
-  state.rows.push({ id, name: "Nieuwe consultant", pfid: "", project: "", projectName: "", client: "", cao: 19, version: "", scale: "8", scalePos: null, level: "MED", pt: 1, assign: 1, salary: 3500, holidayFT: null, car: null, notes: [] });
-  selected = id; render(); $("f-name").scrollIntoView({ block: "center" }); $("f-name").focus(); $("f-name").select();
-};
-$("reset").onclick = () => { state = fresh(); selected = null; render(); };
-$("btn-logout").onclick = () => window.logout();
-$("assume").addEventListener("change", (e) => {
-  const t = e.target;
-  if (t.dataset.tog) { state.toggles[t.dataset.tog] = t.checked; const m = Object.entries(PRESETS).find(([, p]) => Object.keys(p).every((k) => p[k] === state.toggles[k])); state.method = m ? m[0] : "custom"; }
-  if (t.dataset.set) { const v = num(t.value); if (v != null) state.settings[t.dataset.set] = v / +t.dataset.scale; }
-  if (t.dataset.lvl) { const v = num(t.value); if (v != null) state.settings.levels[+t.dataset.lvl][t.dataset.k] = v; }
-  render();
-});
-$("allocs").addEventListener("change", (e) => {
-  if (!e.target.closest(".form-col")) return;
-  const r = state.rows.find((x) => x.id === selected); if (!r) return;
-  const v = e.target.value;
-  switch (e.target.id) {
-    case "f-name": r.name = v; break;
-    case "f-pfid": r.pfid = v; break;
-    case "f-project": r.project = v; break;
-    case "f-client": r.client = v; break;
-    case "f-cao": { r.cao = +v; r.version = ""; const sc = scalesFor(r.cao, pickVersion(r.cao, refDate())); if (sc.length && !sc.some((s) => String(s.s) === String(r.scale))) r.scale = String(sc[0].s); break; }
-    case "f-version": r.version = v; break;
-    case "f-scale": r.scale = v; break;
-    case "f-pos": r.scalePos = v === "" ? null : num(v) / 100; break;
-    case "f-level": r.level = v; break;
-    case "f-pt": r.pt = (num(v) ?? 100) / 100; break;
-    case "f-assign": r.assign = (num(v) ?? 100) / 100; break;
-    case "f-salary": r.salary = num(v); break;
-    case "f-holiday": r.holidayFT = num(v); break;
-    case "f-car": r.car = num(v); break;
-  }
-  r.example = false;
-  render();
-});
-// Clicks inside the expanded detail row must not toggle the row.
-$("allocs").addEventListener("click", (e) => { if (e.target.closest("tr.detail") && !e.target.closest("[data-act]")) e.stopPropagation(); });
+function toggle(id) { openId = openId === id ? null : id; render(); }
+$("allocs").addEventListener("click", (e) => { if (e.target.closest("a")) return; const tr = e.target.closest("tr.rij"); if (tr) toggle(tr.dataset.id); });
+$("allocs").addEventListener("keydown", (e) => { if (e.target.matches("tr.rij") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(e.target.dataset.id); } });
+$("refdate").addEventListener("change", (e) => { if (e.target.value) { state.refDate = e.target.value; save(); render(); } });
+$("s-current").onclick = () => { state.showAll = false; save(); render(); };
+$("s-all").onclick = () => { state.showAll = true; save(); render(); };
+$("p-inc").onclick = () => { state.pension = "inc"; save(); render(); };
+$("p-exc").onclick = () => { state.pension = "exc"; save(); render(); };
+$("m-excel").onclick = () => { setMethod("excel"); render(); };
+$("m-strict").onclick = () => { setMethod("strict"); render(); };
 
-// ---------- import ----------
-$("file").addEventListener("change", async (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  try {
-    if (typeof XLSX === "undefined") throw new Error("de Excel-lezer is niet geladen");
-    const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
-    importWorkbook(wb, f.name);
-  } catch (err) {
-    notice(`Kon ${f.name} niet lezen: ${err.message}. Controleer of het het MaatMan-workbook (.xlsx) is.`);
-  }
-  e.target.value = "";
-});
-function sheetRows(wb, name) { const ws = wb.Sheets[name]; return ws ? XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) : null; }
-function headerIndex(rows, must) { for (let i = 0; i < Math.min(rows.length, 15); i++) if ((rows[i] || []).some((v) => String(v ?? "").trim() === must)) return i; return -1; }
-function colMap(hdr) { const m = {}; (hdr || []).forEach((h, i) => { const k = String(h ?? "").trim(); if (k && !(k in m)) m[k] = i; }); return m; }
-function importWorkbook(wb, fname) {
-  const ref = refDate();
-  const or = sheetRows(wb, "Oracle Projecten-Allocaties");
-  if (!or) return notice(`${fname} heeft geen tabblad "Oracle Projecten-Allocaties". Er is niets geïmporteerd.`);
-  const hi = headerIndex(or, "PERSON NUMBER");
-  if (hi < 0) return notice(`De kolom PERSON NUMBER staat niet in "Oracle Projecten-Allocaties". Er is niets geïmporteerd.`);
-  // cao-schalen
-  const sr = sheetRows(wb, "SUGB-Salarischalen");
-  if (sr && sr.length > 1) {
-    const h = colMap(sr[0]); const g = (row, k) => h[k] == null ? null : row[h[k]];
-    const list = [];
-    for (const row of sr.slice(1)) {
-      const mn = num(g(row, "Min schaal obv 40 uur")), mx = num(g(row, "Max schaal obv 40 uur"));
-      if (mn == null || mx == null || g(row, "Code CAO") == null) continue;
-      list.push({ cao: String(g(row, "CAO") ?? "").trim(), v: String(g(row, "Versie") ?? "").trim(), c: num(g(row, "Code CAO")), s: String(g(row, "Schaal") ?? "").trim(), from: g(row, "Begin (Schaal)"), to: g(row, "Eind (schaal)"), act: num(g(row, "Actief")), hrs: num(g(row, "Wekelijkse arbeidsduur")), min: mn, max: mx, vak: num(g(row, "Vakantiebijslag")), km: num(g(row, "Reiskosten eigen vervoer (uitgegaan met auto)")), home: num(g(row, "Thuiswerk+internet per maand")), eju: num(g(row, "Eindejaarsuitkering")), leaveH: num(g(row, "Totaal verlofuren per jaar")), dayV: num(g(row, "Waarde vakantiedagen")), ikb: num(g(row, "IKB")), pen: num(g(row, "Pensioen werkgeverspremie")), penTxt: g(row, "Pensioen elementen"), fSal: num(g(row, "Periodeloon in schaal")), fToe: num(g(row, "Toeslagen")), fVak: num(g(row, "Vakantiebijslag_2")), fEju: num(g(row, "Vaste uitkeringen (eindejaarsuitkering)")), fran: num(g(row, "Franchise per maand")), other: num(g(row, "Overig per maand")), budget: g(row, "Budgetten2") });
-    }
-    if (list.length) state.scales = list;
-  }
-  // medewerkers
-  const emp = new Map(); const er = sheetRows(wb, "AFAS Medewerkers");
-  if (er) { const h = colMap(er[0]); for (const row of er.slice(1)) { const id = row[h["PFid"]]; if (id != null) emp.set(String(id), { level: row[h["FunctieniveauPFcode"]], name: row[h["Naam"]], out: toDate(row[h["Datum uit dienst"]]) }); } }
-  // looncomponenten: laatste periode tot en met de peildatum, opgeteld binnen die periode
-  const pay = new Map(); const lr = sheetRows(wb, "AFAS Mdw-Looncomponent");
-  const refP = ref.getUTCFullYear() * 12 + ref.getUTCMonth() + 1;
-  if (lr) {
-    const h = colMap(lr[0]);
-    for (const row of lr.slice(1)) {
-      const id = row[h["PFid"]]; if (id == null) continue;
-      const p = (num(row[h["Boekjaar"]]) || 0) * 12 + (num(row[h["Periode"]]) || 0); if (p > refP) continue;
-      const comp = String(row[h["Looncomponent"]] || "").trim(); const amt = num(row[h["Totaalbedrag"]]) || 0;
-      const key = String(id); if (!pay.has(key)) pay.set(key, {});
-      const m = pay.get(key);
-      if (!m[comp] || m[comp].p < p) m[comp] = { p, amt: 0 };
-      if (m[comp].p === p) m[comp].amt += amt;
-    }
-  }
-  // leaseauto's die op de peildatum lopen
-  const cars = new Map(); const ar = sheetRows(wb, "AFAS Mdw-Auto");
-  if (ar) { const h = colMap(ar[0]); for (const row of ar.slice(1)) { const id = row[h["PFid"]]; if (id == null) continue; const a = toDate(row[h["Begindatum"]]), b = toDate(row[h["Einddatum"]]); if (a && a <= ref && (!b || ref <= b)) cars.set(String(id), (num(row[h["Waarde t.b.v. Gelijkwaardig belonen"]]) || 0) - (num(row[h["Eigen bijdrage privégebruik"]]) || 0)); } }
-  // allocaties
-  const h = colMap(or[hi]);
-  const rows = [];
-  or.slice(hi + 1).forEach((row, i) => {
-    const idA = row[h["PERSON NUMBER"]]; if (idA == null || idA === "") return;
-    const idC = h["PERSON NUMBER"] === 0 && row[2] != null && String(row[2]) !== String(idA) ? String(row[2]) : null;
-    const ids = [String(idA), idC].filter(Boolean);
-    const hit = (map) => { for (const id of ids) if (map.has(id)) return map.get(id); return null; };
-    const notes = [];
-    if (idC) notes.push(`Oracle heeft personeelsnummer ${idA}, maar de opzoekkolom in het werkblad heeft ${idC}. Beide nummers zijn geprobeerd.`);
-    const e = hit(emp), p = hit(pay);
-    if (!e) notes.push("Niet gevonden in de AFAS-medewerkerslijst, dus het functieniveau ontbreekt.");
-    if (e && e.out && e.out < ref) notes.push(`Uit dienst sinds ${fmtDate(e.out)}.`);
-    const pt = num(row[h["PT%"]]) ?? 1;
-    let salary = null, holidayFT = null;
-    if (p) {
-      const sal = p["Fulltime salaris tbv berekening vaste uitkeringen"];
-      const hol = p["Periodieke uitbetaling vakantietoeslag"] || p["Reservering vakantietoeslag"];
-      if (sal) { salary = sal.amt; if (refP - sal.p > 1) { const y = Math.floor((sal.p - 1) / 12), m = sal.p - y * 12; notes.push(`Het meest recente salaris in AFAS is van ${String(m).padStart(2, "0")}-${y}.`); } }
-      if (hol) holidayFT = hol.amt / (pt || 1);
-    }
-    if (salary == null) notes.push("Geen fulltime salaris gevonden in de AFAS-looncomponenten.");
-    const end = toDate(row[h["END DATE PERSON ALLOCATION"]]); if (end && end < ref) notes.push(`Allocatie afgelopen op ${fmtDate(end)}.`);
-    const car = hit(cars);
-    rows.push({ id: "i" + i + "-" + idA, name: row[h["PERSON NAME"]] || (e && e.name) || String(idA), pfid: String(idA), project: String(row[h["PROJECT NUMBER"]] ?? ""), projectName: row[h["PROJECT NAME"]] || "", client: row[h["CUSTOMER NAME"]] || "", cao: num(row[h["CAO"]]), version: "", scale: String(row[h["SCHAAL"]] ?? "").trim(), scalePos: null, level: e ? e.level : "", pt, assign: num(row[h["Opdracht%"]]) ?? 1, salary, holidayFT, car: car ?? null, notes });
-  });
-  state.rows = rows; selected = null;
-  state.importInfo = `${rows.length} allocatie${rows.length === 1 ? "" : "s"} geïmporteerd uit ${fname}${state.scales ? `, met ${state.scales.length} cao-schalen` : ""}. Salarissen en leaseauto's zijn bepaald per peildatum.`;
-  render();
-}
-
-// ---------- start: zelfde login als Marktmonitor en Leadbeheer ----------
-(async function boot() {
-  const profile = await window.requireUser();
-  if (!profile) return; // requireUser heeft al doorgestuurd naar login.html
-  if (profile.role === "admin") $("adminLink").hidden = false;
-  $("loading").hidden = true;
-  $("app").hidden = false;
-  render();
-})();
+boot(render);
 </script>
 </body>
 </html>

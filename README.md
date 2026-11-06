@@ -9,10 +9,29 @@ Colleagues sign in with the **same account** they use for Marktmonitor and
 [Leadbeheer](https://github.com/mathieu-butenaerts/leadbeheer) (same Supabase
 project). Styling matches those apps.
 
+## Pages
+
+- **Overzicht** (`index.html`): every current consultant × project
+  combination, with totals and a table per project, worst first. Click a row
+  for the full calculation. "Alle allocaties" also shows ended ones.
+- **Calculator** (`calculator.html`): pick any consultant and any project,
+  including combinations that don't exist yet, and change values under
+  *Wat als* (assignment %, scale, salary, lease car…). Two tables rank all
+  projects for the chosen consultant and all consultants for the chosen
+  project. Nothing here is saved.
+- **Instellingen** (`instellingen.html`): import the workbook; add, edit and
+  remove consultants, projects and allocations; set the reference date, the
+  method and every assumption.
+
+The data is split into consultants (salary, job level, part-time %, lease
+car), projects (client, CAO, scale) and allocations (which consultant is on
+which project, assignment %, dates). An allocation can override its
+project's scale.
+
 ## How to use it
 
-1. Sign in, then click **Workbook importeren** and pick the MaatMan workbook
-   (`.xlsx`). The app reads these tabs:
+1. Sign in, go to **Instellingen**, click **Workbook importeren** and pick the
+   MaatMan workbook (`.xlsx`). The app reads these tabs:
    - `Oracle Projecten-Allocaties`: one row per consultant per project.
    - `AFAS Medewerkers`: job level and end of employment.
    - `AFAS Mdw-Looncomponent`: salary and holiday pay. The app takes the
@@ -21,9 +40,8 @@ project). Styling matches those apps.
    - `AFAS Mdw-Auto`: lease cars that run on the reference date.
    - `SUGB-Salarischalen`: the CAO scales. If this tab is missing, the
      scales built into `cao-schalen.js` are used.
-2. The page shows the totals, a table per project and a table per allocation,
-   worst first. Click an allocation to see the full calculation and edit any
-   input.
+2. Check the results on **Overzicht** and try other combinations in the
+   **Calculator**.
 
 **Imported data stays in the browser.** It is kept in that browser's
 `localStorage` and is never sent to Supabase or anywhere else. Each colleague
@@ -64,7 +82,11 @@ results.
 
 ## Files
 
-- `index.html`: the app.
+- `index.html`, `calculator.html`, `instellingen.html`: the three pages.
+- `app.js`: shared by all pages: stored data, the calculation, the workbook
+  import and the sign-in check. Data from the first, single-page version
+  (`maatman-v1` in localStorage) is converted automatically.
+- `style.css`: shared styling, matching Leadbeheer.
 - `cao-schalen.js`: CAO scales taken from the `SUGB-Salarischalen` tab of the
   workbook of 22-07-2026. Importing a newer workbook overrides them in the
   browser; to update the built-in copy, replace this file.

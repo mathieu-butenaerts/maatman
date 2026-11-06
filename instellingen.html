@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instellingen · MaatMan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="cao-schalen.js"></script>
+<script src="app.js"></script>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <span class="wordmark">
+        <svg width="38" height="31" viewBox="0 0 42 34" aria-hidden="true"><polygon points="5,2 22,2 17,13 0,13" fill="#83007D"></polygon><rect x="2" y="15" width="15" height="15" rx="2" fill="#11448D"></rect><rect x="19" y="17" width="12" height="13" rx="2" fill="#199DD9"></rect></svg>
+        <span class="wm-text"><b>pro</b>fource</span>
+      </span>
+      <div class="title-block"><h1>MaatMan</h1><div class="subtitle">WTTA · gelijkwaardig belonen</div></div>
+    </div>
+    <div class="topmeta">
+      <a class="btn" href="https://mathieu-butenaerts.github.io/leadbeheer/" target="_blank" rel="noopener noreferrer">Leadbeheer</a>
+      <a class="btn" href="https://mathieu-butenaerts.github.io/Scrappingtool-v2/" target="_blank" rel="noopener noreferrer">Marktmonitor</a>
+      <a class="btn" id="adminLink" href="https://mathieu-butenaerts.github.io/Scrappingtool-v2/admin.html" target="_blank" rel="noopener noreferrer" hidden>Beheer</a>
+      <button class="btn" id="btn-logout">Uitloggen</button>
+    </div>
+  </div>
+  <nav class="nav" aria-label="Pagina's">
+    <a href="index.html">Overzicht</a>
+    <a href="calculator.html">Calculator</a>
+    <a href="instellingen.html" aria-current="page">Instellingen</a>
+  </nav>
+
+  <div id="loading" class="loading">Inloggen controleren…</div>
+
+  <main id="app" hidden>
+    <p class="intro">Hier beheer je alles waar MaatMan mee rekent: de gegevens (consultants, projecten en wie op welk project zit) en de aannames van de berekening. Wijzigingen worden direct bewaard in deze browser en gelden meteen op het overzicht en in de calculator.</p>
+    <div class="jump">
+      <a class="mode-btn" href="#gegevens">Gegevens</a>
+      <a class="mode-btn" href="#consultants">Consultants</a>
+      <a class="mode-btn" href="#projecten">Projecten</a>
+      <a class="mode-btn" href="#allocaties">Allocaties</a>
+      <a class="mode-btn" href="#methode">Methode</a>
+      <a class="mode-btn" href="#aannames">Aannames</a>
+    </div>
+    <div id="notice" class="notice" hidden></div>
+
+    <section class="panel" id="gegevens">
+      <div class="panel-head"><h2>Gegevens</h2><span class="hint" id="dataSummary"></span></div>
+      <div class="panel-body" style="display:flex;flex-direction:column;gap:12px">
+        <p class="klein" style="margin:0;font-size:12.5px">Importeer het MaatMan-workbook (.xlsx) om alle consultants, projecten en allocaties te vervangen. MaatMan leest de tabbladen Oracle Projecten-Allocaties, AFAS Medewerkers, AFAS Mdw-Looncomponent, AFAS Mdw-Auto en SUGB-Salarischalen. Salarissen en leaseauto's worden bepaald per peildatum.</p>
+        <div class="pills">
+          <label class="btn" for="file" tabindex="0" id="fileBtn">Workbook importeren</label>
+          <input id="file" type="file" accept=".xlsx,.xlsm" hidden>
+          <button class="btn btn-quiet" id="loadExample">Voorbeeld laden</button>
+          <button class="btn btn-danger" id="clearAll">Alle gegevens wissen</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="consultants">
+      <div class="panel-head"><h2>Consultants</h2><button class="btn btn-quiet btn-sm" id="addCons">+ Consultant toevoegen</button></div>
+      <div class="scroll"><table class="edit" id="tCons"></table></div>
+    </section>
+
+    <section class="panel" id="projecten">
+      <div class="panel-head"><h2>Projecten</h2><button class="btn btn-quiet btn-sm" id="addProj">+ Project toevoegen</button></div>
+      <div class="scroll"><table class="edit" id="tProj"></table></div>
+    </section>
+
+    <section class="panel" id="allocaties">
+      <div class="panel-head"><h2>Allocaties</h2><span class="hint">Welke consultant op welk project zit · lege einddatum = lopend</span><button class="btn btn-quiet btn-sm" id="addAlloc">+ Allocatie toevoegen</button></div>
+      <div class="scroll"><table class="edit" id="tAlloc"></table></div>
+    </section>
+
+    <section class="panel" id="methode">
+      <div class="panel-head"><h2>Methode</h2><span class="hint">Geldt voor alle pagina's</span></div>
+      <div class="panel-body aannames" id="methodBox"></div>
+    </section>
+
+    <section class="panel" id="aannames">
+      <div class="panel-head"><h2>Aannames</h2><button class="btn btn-quiet btn-sm" id="resetSettings">Aannames terugzetten</button></div>
+      <div class="panel-body aannames" id="assumeBox"></div>
+    </section>
+
+    <footer>Geïmporteerde gegevens blijven in deze browser en worden nergens naartoe gestuurd. Iedere collega importeert het workbook zelf.</footer>
+  </main>
+</div>
+
+<script>
+const DEL = '<svg width="14" height="14" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M3 4h9M6 4V2.5h3V4M4.5 4l.5 8.5h5l.5-8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const inp = (kind, id, f, value, cls, type = "text", extra = "") => `<input class="${cls}" type="${type}" data-kind="${kind}" data-id="${esc(id)}" data-f="${f}" id="${kind}-${esc(id)}-${f}" value="${esc(value ?? "")}" aria-label="${f}" ${extra}>`;
+const sel = (kind, id, f, options, cls) => `<select class="${cls}" data-kind="${kind}" data-id="${esc(id)}" data-f="${f}" id="${kind}-${esc(id)}-${f}" aria-label="${f}">${options}</select>`;
+const delBtn = (kind, id, label) => `<button class="icon-btn" data-del="${kind}" data-id="${esc(id)}" title="${esc(label)} verwijderen" aria-label="${esc(label)} verwijderen">${DEL}</button>`;
+
+function render() {
+  const focusId = document.activeElement && document.activeElement.id && document.activeElement.closest("main") ? document.activeElement.id : null;
+  dataNotice();
+  $("dataSummary").textContent = `${state.consultants.length} consultants · ${state.projects.length} projecten · ${state.allocations.length} allocaties${state.example ? " (voorbeeld)" : ""}`;
+  renderCons(); renderProj(); renderAlloc(); renderMethod(); renderAssume();
+  if (focusId && $(focusId)) $(focusId).focus();
+}
+
+function renderCons() {
+  const list = [...state.consultants].sort((a, b) => String(a.name).localeCompare(String(b.name), "nl"));
+  if (!list.length) { $("tCons").innerHTML = `<tbody><tr><td class="empty-state">Nog geen consultants.</td></tr></tbody>`; return; }
+  $("tCons").innerHTML = `<thead><tr><th>Naam</th><th>Personeelsnr.</th><th>Functieniveau</th><th class="r">Parttime %</th><th class="r">Salaris fulltime / mnd</th><th class="r">Vakantiegeld fulltime / mnd</th><th class="r">Leaseauto / mnd incl. btw</th><th class="r">Allocaties</th><th>Meldingen</th><th></th></tr></thead><tbody>` +
+    list.map((c) => `<tr>
+      <td>${inp("c", c.id, "name", c.name, "w-m")}</td>
+      <td>${inp("c", c.id, "pfid", c.pfid, "w-s")}</td>
+      <td>${sel("c", c.id, "level", levelOptions(c.level), "w-s")}</td>
+      <td class="r">${inp("c", c.id, "pt", p100(c.pt), "w-xs", "number", 'step="5"')}</td>
+      <td class="r">${inp("c", c.id, "salary", c.salary, "w-s", "number", 'step="50"')}</td>
+      <td class="r">${inp("c", c.id, "holidayFT", c.holidayFT == null ? "" : +c.holidayFT.toFixed(2), "w-s", "number", 'step="1" placeholder="8%"')}</td>
+      <td class="r">${inp("c", c.id, "car", c.car, "w-s", "number", 'step="10" placeholder="Geen"')}</td>
+      <td class="r tnum">${state.allocations.filter((a) => a.consultantId === c.id).length}</td>
+      <td class="warn">${(c.notes || []).map(esc).join("<br>")}</td>
+      <td class="r">${delBtn("c", c.id, c.name)}</td></tr>`).join("") + "</tbody>";
+}
+function renderProj() {
+  const list = [...state.projects].sort((a, b) => String(a.number).localeCompare(String(b.number), "nl", { numeric: true }));
+  if (!list.length) { $("tProj").innerHTML = `<tbody><tr><td class="empty-state">Nog geen projecten.</td></tr></tbody>`; return; }
+  $("tProj").innerHTML = `<thead><tr><th>Projectnr.</th><th>Omschrijving</th><th>Klant</th><th>Cao van de klant</th><th>Versie</th><th>Schaal</th><th class="r">Positie in schaal %</th><th class="r">Allocaties</th><th></th></tr></thead><tbody>` +
+    list.map((p) => `<tr>
+      <td>${inp("p", p.id, "number", p.number, "w-s")}</td>
+      <td>${inp("p", p.id, "name", p.name, "w-l")}</td>
+      <td>${inp("p", p.id, "client", p.client, "w-m")}</td>
+      <td>${sel("p", p.id, "cao", caoOptions(p.cao), "w-m")}</td>
+      <td>${sel("p", p.id, "version", versionOptions(p.cao, p.version), "w-s")}</td>
+      <td>${sel("p", p.id, "scale", scaleOptions(p.cao, p.version, p.scale), "w-xs")}</td>
+      <td class="r">${inp("p", p.id, "scalePos", p100(p.scalePos), "w-xs", "number", `step="1" placeholder="${nl(state.settings.scalePos * 100)}"`)}</td>
+      <td class="r tnum">${state.allocations.filter((a) => a.projectId === p.id).length}</td>
+      <td class="r">${delBtn("p", p.id, "project " + p.number)}</td></tr>`).join("") + "</tbody>";
+}
+function renderAlloc() {
+  const list = [...state.allocations].sort((a, b) => String((consultant(a.consultantId) || {}).name).localeCompare(String((consultant(b.consultantId) || {}).name), "nl"));
+  if (!list.length) { $("tAlloc").innerHTML = `<tbody><tr><td class="empty-state">Nog geen allocaties.</td></tr></tbody>`; return; }
+  const consOpts = (cur) => [...state.consultants].sort((a, b) => String(a.name).localeCompare(String(b.name), "nl")).map((c) => `<option value="${esc(c.id)}" ${c.id === cur ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+  const projOpts = (cur) => [...state.projects].sort((a, b) => String(a.number).localeCompare(String(b.number), "nl", { numeric: true })).map((p) => `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(projectLabel(p))}</option>`).join("");
+  $("tAlloc").innerHTML = `<thead><tr><th>Consultant</th><th>Project</th><th class="r">Opdracht %</th><th>Schaal</th><th>Start</th><th>Einde</th><th>Status</th><th>Meldingen</th><th></th></tr></thead><tbody>` +
+    list.map((a) => { const p = project(a.projectId); const cur = isCurrent(a); return `<tr>
+      <td>${sel("a", a.id, "consultantId", consOpts(a.consultantId), "w-m")}</td>
+      <td>${sel("a", a.id, "projectId", projOpts(a.projectId), "w-l")}</td>
+      <td class="r">${inp("a", a.id, "assign", p100(a.assign), "w-xs", "number", 'step="5"')}</td>
+      <td>${sel("a", a.id, "scale", `<option value="">Zoals project (${esc(p ? p.scale : "–")})</option>` + (p ? scaleOptions(p.cao, p.version, a.scale) : ""), "w-s")}</td>
+      <td>${inp("a", a.id, "start", a.start, "w-s", "date")}</td>
+      <td>${inp("a", a.id, "end", a.end, "w-s", "date")}</td>
+      <td><span class="status ${cur ? "ok" : "off"}">${cur ? "Lopend" : "Afgelopen"}</span></td>
+      <td class="warn">${(a.notes || []).map(esc).join("<br>")}</td>
+      <td class="r">${delBtn("a", a.id, "allocatie")}</td></tr>`; }).join("") + "</tbody>";
+}
+function renderMethod() {
+  const box = $("methodBox");
+  const sig = JSON.stringify([state.toggles, state.method, state.refDate, state.pension]);
+  if (box.dataset.sig === sig) return;
+  box.innerHTML = `
+    <div class="filters" style="margin:0;padding:0;border:0;background:none">
+      <label class="ctl"><span>Peildatum</span><input id="refdate" type="date" value="${esc(state.refDate)}"></label>
+      <div class="ctl"><span>Methode</span><div class="pills">
+        <button class="mode-btn" data-method="excel" aria-pressed="${state.method === "excel"}">Zoals Excel</button>
+        <button class="mode-btn" data-method="strict" aria-pressed="${state.method === "strict"}">Strikt</button>
+        <button class="mode-btn" aria-pressed="${state.method === "custom"}" disabled>Aangepast</button></div></div>
+      <div class="ctl"><span>Kerncijfers</span><div class="pills">
+        <button class="mode-btn" data-pension="inc" aria-pressed="${state.pension === "inc"}">Incl. pensioen</button>
+        <button class="mode-btn" data-pension="exc" aria-pressed="${state.pension === "exc"}">Excl. pensioen</button></div></div>
+    </div>
+    <p class="klein" style="margin:0">De peildatum bepaalt welke cao-versie geldt, welke allocaties lopen en, bij het importeren, welk salaris en welke leaseauto meetellen. <em>Zoals Excel</em> rekent precies als het oorspronkelijke workbook; <em>Strikt</em> zet de vier correcties hieronder aan. Zet je zelf schakelaars om, dan wordt de methode <em>Aangepast</em>.</p>
+    <div style="display:flex;flex-direction:column;gap:12px">${TOGGLES.map(([k, l, why]) => `<label class="check"><input type="checkbox" id="t-${k}" data-tog="${k}" ${state.toggles[k] ? "checked" : ""}><span>${l}<div class="klein">${why}</div></span></label>`).join("")}</div>`;
+  box.dataset.sig = sig;
+}
+function renderAssume() {
+  const box = $("assumeBox");
+  const sig = JSON.stringify([state.settings, !!state.scales]);
+  if (box.dataset.sig === sig) return;
+  const S = state.settings;
+  const n = (label, key, scale = 1) => `<label class="fld"><span class="field-label">${label}</span><input type="number" step="any" id="s-${key}" data-set="${key}" data-scale="${scale}" value="${+(S[key] * scale).toFixed(4)}"></label>`;
+  box.innerHTML = `
+    <div><h3>Kant van de klant</h3><div class="row">${n("Positie in schaal %", "scalePos", 100)}${n("Woon-werkafstand km (enkel)", "commuteKm")}${n("Reisdagen per maand", "commuteDays")}${n("Wettelijke verlofuren (Excel-methode)", "legalLeaveH")}</div></div>
+    <div><h3>Kant van Profource</h3><div class="row">${n("Bonus, % maandsalaris / jaar", "bonusPct", 100)}${n("Extra verlofdagen", "extraLeaveDays")}${n("Thuiswerkvergoeding / mnd", "homeAllow")}${n("Internetvergoeding / mnd", "internet")}${n("Diversen / mnd", "misc")}${n("Teammanager / mnd", "manager")}${n("Resterend mobiliteitsbudget %", "leftoverPct", 100)}${n("Btw %", "vat", 100)}</div></div>
+    <div><h3>Pensioen en kosten</h3><div class="row">${n("Premie Profource %", "pfPensionPct", 100)}${n("Franchise Profource / mnd", "pfFranchise")}${n("Factor pensioencompensatie", "pensionFactor")}${n("Werkgeverslasten op tekort %", "burden", 100)}</div></div>
+    <div><h3>Functieniveaus</h3><div class="scroll levels" style="margin-top:10px;border:1px solid var(--border);border-radius:10px"><table><thead><tr><th>Niveau</th><th class="r">Mobiliteitsbudget / mnd excl. btw</th><th class="r">Opleidingen / jaar</th></tr></thead><tbody>${S.levels.map((l, i) => `<tr><td>${esc(l.name)}</td><td class="r"><input type="number" id="l-${i}-mob" data-lvl="${i}" data-k="mob" value="${l.mob}"></td><td class="r"><input type="number" id="l-${i}-train" data-lvl="${i}" data-k="train" value="${l.train}"></td></tr>`).join("")}</tbody></table></div></div>
+    <p class="klein" style="margin:0">Cao-schalen: ${state.scales ? "uit je geïmporteerde workbook" : "ingebouwd, uit het MaatMan-workbook van 22-07-2026"} (${scales().length} schalen met een minimum en maximum). De cao-versie wordt automatisch gekozen: de hoogste versie waarvan de looptijd de peildatum bevat, anders de versie die als actief is gemarkeerd.</p>`;
+  box.dataset.sig = sig;
+}
+
+// ---------- editing ----------
+function update(kind, id, f, raw) {
+  const list = kind === "c" ? state.consultants : kind === "p" ? state.projects : state.allocations;
+  const o = list.find((x) => x.id === id); if (!o) return;
+  const pctF = ["pt", "assign", "scalePos"], numF = ["salary", "holidayFT", "car"];
+  if (pctF.includes(f)) { const v = num(raw); o[f] = v == null ? (f === "scalePos" ? null : 1) : v / 100; }
+  else if (numF.includes(f)) o[f] = num(raw);
+  else if (f === "cao") { o.cao = num(raw); o.version = ""; const sc = scalesFor(o.cao, pickVersion(o.cao)); if (sc.length && !sc.some((s) => String(s.s) === String(o.scale))) o.scale = String(sc[0].s); }
+  else if (f === "version") { o.version = raw; const sc = scalesFor(o.cao, raw || pickVersion(o.cao)); if (sc.length && !sc.some((s) => String(s.s) === String(o.scale))) o.scale = String(sc[0].s); }
+  else if (f === "scale" && kind === "a") o.scale = raw || null;
+  else o[f] = raw === "" && (f === "start" || f === "end") ? null : raw;
+  state.example = false;
+  save(); render();
+}
+$("app").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.kind) return update(t.dataset.kind, t.dataset.id, t.dataset.f, t.value);
+  if (t.id === "refdate" && t.value) { state.refDate = t.value; save(); return render(); }
+  if (t.dataset.tog) { state.toggles[t.dataset.tog] = t.checked; syncMethod(); save(); return render(); }
+  if (t.dataset.set) { const v = num(t.value); if (v != null) { state.settings[t.dataset.set] = v / +t.dataset.scale; save(); render(); } return; }
+  if (t.dataset.lvl) { const v = num(t.value); if (v != null) { state.settings.levels[+t.dataset.lvl][t.dataset.k] = v; save(); render(); } }
+});
+$("app").addEventListener("click", (e) => {
+  const m = e.target.closest("[data-method]"); if (m) { setMethod(m.dataset.method); return render(); }
+  const p = e.target.closest("[data-pension]"); if (p) { state.pension = p.dataset.pension; save(); return render(); }
+  const d = e.target.closest("[data-del]"); if (!d) return;
+  const id = d.dataset.id, kind = d.dataset.del;
+  if (kind === "c") {
+    const n = state.allocations.filter((a) => a.consultantId === id).length;
+    if (!confirm(`${(consultant(id) || {}).name || "Deze consultant"} verwijderen${n ? ` met ${n} allocatie${n === 1 ? "" : "s"}` : ""}?`)) return;
+    state.consultants = state.consultants.filter((c) => c.id !== id); state.allocations = state.allocations.filter((a) => a.consultantId !== id);
+  } else if (kind === "p") {
+    const n = state.allocations.filter((a) => a.projectId === id).length;
+    if (!confirm(`Project ${(project(id) || {}).number || ""} verwijderen${n ? ` met ${n} allocatie${n === 1 ? "" : "s"}` : ""}?`)) return;
+    state.projects = state.projects.filter((x) => x.id !== id); state.allocations = state.allocations.filter((a) => a.projectId !== id);
+  } else state.allocations = state.allocations.filter((a) => a.id !== id);
+  state.example = false; save(); render();
+});
+$("addCons").onclick = () => { const id = newId("c"); state.consultants.push({ id, pfid: "", name: "Nieuwe consultant", level: "MED", pt: 1, salary: 3500, holidayFT: null, car: null, notes: [] }); state.example = false; save(); render(); const el = $(`c-${id}-name`); el.focus(); el.select(); };
+$("addProj").onclick = () => { const id = newId("p"); const cao = 19; const v = pickVersion(cao); const sc = scalesFor(cao, v); state.projects.push({ id, number: "Nieuw", name: "", client: "", cao, version: "", scale: sc.length ? String(sc[0].s) : "", scalePos: null }); state.example = false; save(); render(); const el = $(`p-${id}-number`); el.focus(); el.select(); };
+$("addAlloc").onclick = () => {
+  if (!state.consultants.length || !state.projects.length) return notice("Voeg eerst een consultant en een project toe.", true);
+  const id = newId("a"); state.allocations.push({ id, consultantId: state.consultants[0].id, projectId: state.projects[0].id, assign: 1, scale: null, start: null, end: null, notes: [] });
+  state.example = false; save(); render(); $(`a-${id}-consultantId`).focus();
+};
+$("resetSettings").onclick = () => { state.settings = clone(DEFAULTS); save(); render(); };
+$("loadExample").onclick = () => { resetToExample(); render(); };
+$("clearAll").onclick = () => { if (confirm("Alle consultants, projecten en allocaties uit deze browser wissen? Aannames blijven staan.")) { clearData(); render(); } };
+$("file").addEventListener("change", async (e) => { const f = e.target.files[0]; if (f && await importFile(f)) render(); e.target.value = ""; });
+$("fileBtn").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
+
+boot(() => { render(); if (location.hash && $(location.hash.slice(1))) $(location.hash.slice(1)).scrollIntoView(); });
+</script>
+</body>
+</html>

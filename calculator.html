@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculator · MaatMan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<script src="cao-schalen.js"></script>
+<script src="app.js"></script>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <span class="wordmark">
+        <svg width="38" height="31" viewBox="0 0 42 34" aria-hidden="true"><polygon points="5,2 22,2 17,13 0,13" fill="#83007D"></polygon><rect x="2" y="15" width="15" height="15" rx="2" fill="#11448D"></rect><rect x="19" y="17" width="12" height="13" rx="2" fill="#199DD9"></rect></svg>
+        <span class="wm-text"><b>pro</b>fource</span>
+      </span>
+      <div class="title-block"><h1>MaatMan</h1><div class="subtitle">WTTA · gelijkwaardig belonen</div></div>
+    </div>
+    <div class="topmeta">
+      <a class="btn" href="https://mathieu-butenaerts.github.io/leadbeheer/" target="_blank" rel="noopener noreferrer">Leadbeheer</a>
+      <a class="btn" href="https://mathieu-butenaerts.github.io/Scrappingtool-v2/" target="_blank" rel="noopener noreferrer">Marktmonitor</a>
+      <a class="btn" id="adminLink" href="https://mathieu-butenaerts.github.io/Scrappingtool-v2/admin.html" target="_blank" rel="noopener noreferrer" hidden>Beheer</a>
+      <button class="btn" id="btn-logout">Uitloggen</button>
+    </div>
+  </div>
+  <nav class="nav" aria-label="Pagina's">
+    <a href="index.html">Overzicht</a>
+    <a href="calculator.html" aria-current="page">Calculator</a>
+    <a href="instellingen.html">Instellingen</a>
+  </nav>
+
+  <div id="loading" class="loading">Inloggen controleren…</div>
+
+  <main id="app" hidden>
+    <p class="intro">Kies een consultant en een project om te zien hoe die combinatie uitpakt, ook als die nu niet bestaat. Pas onder <em>Wat als</em> waarden aan om andere situaties door te rekenen. Niets hier wordt opgeslagen; vaste gegevens wijzig je in <a href="instellingen.html">Instellingen</a>.</p>
+    <div id="notice" class="notice" hidden></div>
+
+    <div class="calc-layout">
+      <div class="calc-side">
+        <section class="panel">
+          <div class="panel-head"><h2>Combinatie</h2><span id="comboChip"></span></div>
+          <div class="panel-body">
+            <label class="fld"><span class="field-label">Consultant</span><select id="selCons"></select></label>
+            <label class="fld"><span class="field-label">Project</span><select id="selProj"></select></label>
+            <div class="ctl"><span>Kerncijfers</span>
+              <div class="pills" role="group" aria-label="Pensioen">
+                <button class="mode-btn" id="p-inc">Incl. pensioen</button>
+                <button class="mode-btn" id="p-exc">Excl. pensioen</button>
+              </div>
+            </div>
+            <div class="klein">Methode: <a href="instellingen.html#methode" id="methodLink"></a> · peildatum <span id="refLabel" class="tnum"></span></div>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h2>Wat als</h2><button class="btn btn-quiet btn-sm" id="resetOver">Standaardwaarden</button></div>
+          <div class="panel-body" id="overForm"></div>
+        </section>
+      </div>
+      <section class="panel">
+        <div class="panel-head"><h2 id="resultTitle">Berekening</h2><span class="hint">Bedragen per maand</span></div>
+        <div class="panel-body calc-col" id="result"></div>
+      </section>
+    </div>
+
+    <div class="duo">
+      <section class="panel">
+        <div class="panel-head"><h2 id="byProjTitle">Alle projecten</h2><span class="hint">Fulltime verschil · klik om te kiezen</span></div>
+        <div class="scroll"><table id="byProj"></table></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2 id="byConsTitle">Alle consultants</h2><span class="hint">Fulltime verschil · klik om te kiezen</span></div>
+        <div class="scroll"><table id="byCons"></table></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+let consId = null, projId = null, over = {}, carMode = "default";
+
+const existing = () => state.allocations.find((a) => a.consultantId === consId && a.projectId === projId) || null;
+function base() { const a = existing(); return a ? { assign: a.assign, scale: a.scale } : {}; }
+function currentInput() { return inputFor(consultant(consId), project(projId), { ...base(), ...over }); }
+
+function pickDefaults() {
+  const q = new URLSearchParams(location.search);
+  consId = consultant(q.get("consultant")) ? q.get("consultant") : consId;
+  projId = project(q.get("project")) ? q.get("project") : projId;
+  if (!consultant(consId)) consId = state.consultants[0] ? state.consultants[0].id : null;
+  if (!project(projId)) {
+    const a = state.allocations.find((x) => x.consultantId === consId);
+    projId = a ? a.projectId : (state.projects[0] ? state.projects[0].id : null);
+  }
+}
+function syncUrl() { const q = new URLSearchParams(); if (consId) q.set("consultant", consId); if (projId) q.set("project", projId); history.replaceState(null, "", "?" + q.toString()); }
+
+function render() {
+  pickDefaults(); syncUrl(); dataNotice();
+  $("p-inc").setAttribute("aria-pressed", state.pension === "inc"); $("p-exc").setAttribute("aria-pressed", state.pension === "exc");
+  $("methodLink").textContent = methodLabel(); $("refLabel").textContent = fmtDate(state.refDate);
+  const byName = [...state.consultants].sort((a, b) => String(a.name).localeCompare(String(b.name), "nl"));
+  const byNum = [...state.projects].sort((a, b) => String(a.number).localeCompare(String(b.number), "nl", { numeric: true }));
+  $("selCons").innerHTML = byName.length ? byName.map((c) => `<option value="${esc(c.id)}" ${c.id === consId ? "selected" : ""}>${esc(c.name)}${c.pfid ? " (" + esc(c.pfid) + ")" : ""}</option>`).join("") : `<option value="">Nog geen consultants</option>`;
+  $("selProj").innerHTML = byNum.length ? byNum.map((p) => `<option value="${esc(p.id)}" ${p.id === projId ? "selected" : ""}>${esc(projectLabel(p))}</option>`).join("") : `<option value="">Nog geen projecten</option>`;
+  const a = existing();
+  $("comboChip").innerHTML = consId && projId ? (a ? `<span class="chip">Bestaande allocatie</span>` : `<span class="chip muted">Nieuwe combinatie</span>`) : "";
+  renderOver(); renderResult(); renderTables();
+}
+
+function renderOver() {
+  const cons = consultant(consId), proj = project(projId);
+  if (!cons || !proj) { $("overForm").innerHTML = `<p class="klein">Voeg eerst consultants en projecten toe in <a href="instellingen.html">Instellingen</a>.</p>`; return; }
+  const b = base(), inp = currentInput();
+  const focusId = document.activeElement && document.activeElement.closest && document.activeElement.closest("#overForm") ? document.activeElement.id : null;
+  const dflt = (v, fmt) => v == null || v === "" ? "" : fmt(v);
+  const f = (label, id, key, value, placeholder, attrs = "") => `<label class="fld"><span class="field-label">${label}</span><input id="${id}" data-k="${key}" type="number" value="${esc(value)}" placeholder="${esc(placeholder)}" ${attrs}></label>`;
+  const assignDefault = b.assign ?? 1;
+  const carDefault = cons.car == null ? "mobiliteitsbudget" : "leaseauto " + eur0.format(cons.car);
+  $("overForm").innerHTML = `
+    <div class="grid2">
+      ${f("Opdracht %", "o-assign", "assign", over.assign == null ? "" : p100(over.assign), p100(assignDefault), 'step="5" data-pct="1"')}
+      ${f("Parttime %", "o-pt", "pt", over.pt == null ? "" : p100(over.pt), p100(cons.pt ?? 1), 'step="5" data-pct="1"')}
+    </div>
+    <div class="grid2">
+      <label class="fld"><span class="field-label">Cao-versie</span><select id="o-version" data-k="version">${versionOptions(proj.cao, over.version ?? proj.version)}</select></label>
+      <label class="fld"><span class="field-label">Schaal</span><select id="o-scale" data-k="scale">${scaleOptions(proj.cao, inp.version, inp.scale)}</select></label>
+    </div>
+    ${f("Positie in schaal %", "o-pos", "scalePos", over.scalePos == null ? "" : p100(over.scalePos), dflt(proj.scalePos ?? state.settings.scalePos, p100), 'step="1" data-pct="1"')}
+    <div class="grid2">
+      ${f("Salaris fulltime", "o-salary", "salary", over.salary ?? "", dflt(cons.salary, (v) => nl(v)), 'step="50"')}
+      ${f("Vakantiegeld fulltime", "o-holiday", "holidayFT", over.holidayFT ?? "", cons.holidayFT == null ? "8% van salaris" : nl(cons.holidayFT), 'step="1"')}
+    </div>
+    <div class="grid2">
+      <label class="fld"><span class="field-label">Mobiliteit</span><select id="o-carmode">
+        <option value="default" ${carMode === "default" ? "selected" : ""}>Zoals consultant (${esc(carDefault)})</option>
+        <option value="none" ${carMode === "none" ? "selected" : ""}>Mobiliteitsbudget</option>
+        <option value="car" ${carMode === "car" ? "selected" : ""}>Leaseauto</option></select></label>
+      ${carMode === "car" ? f("Leaseauto / mnd incl. btw", "o-car", "car", typeof over.car === "number" ? over.car : "", cons.car == null ? "Bedrag invullen" : nl(cons.car), 'step="10"') : ""}
+    </div>
+    <div class="klein">Lege velden gebruiken de waarden van ${esc(cons.name)} en project ${esc(proj.number)}${existing() ? " uit de bestaande allocatie" : ""}.</div>`;
+  if (focusId && $(focusId)) $(focusId).focus();
+}
+
+function renderResult() {
+  const cons = consultant(consId), proj = project(projId);
+  if (!cons || !proj) { $("resultTitle").textContent = "Berekening"; $("result").innerHTML = `<p class="empty-state">Kies een consultant en een project.</p>`; return; }
+  $("resultTitle").textContent = `${cons.name} op ${proj.number}${proj.client ? " · " + proj.client : ""}`;
+  const c = calc(currentInput());
+  const a = existing();
+  const changed = Object.keys(over).length;
+  const notes = [...(cons.notes || []), ...(a ? a.notes || [] : [])];
+  $("result").innerHTML = (changed ? `<div class="notice" style="margin:0">Met ${changed} aangepaste waarde${changed === 1 ? "" : "n"} uit <em>Wat als</em>.</div>` : "") + breakdownHTML(c, proj.cao, notes);
+}
+
+function rankRows(list, label, pickKey) {
+  if (!list.length) return `<tbody><tr><td class="empty-state">Niets om te vergelijken.</td></tr></tbody>`;
+  list.sort((x, y) => (x.c.scale ? headFT(x.c) : -1e9) - (y.c.scale ? headFT(y.c) : -1e9));
+  return `<thead><tr><th>${label}</th><th>Cao · schaal</th><th class="r">Verschil / mnd</th><th>Status</th></tr></thead><tbody>` + list.map((x) => {
+    const has = !!x.c.scale; const [cls, txt] = !has || !x.c.ok ? ["chk", "Controleren"] : headFT(x.c) < -0.5 ? ["gap", "Onder klant"] : ["ok", "In orde"];
+    return `<tr class="rij ${x.sel ? "sel" : ""}" tabindex="0" data-pick="${pickKey}" data-id="${esc(x.id)}"><td><span class="naam">${esc(x.title)}</span>${x.alloc ? '<span class="tag">nu</span>' : ""}<div class="klein">${esc(x.sub)}</div></td><td>${esc(caoName(x.cao))}<div class="klein">schaal ${esc(x.scale ?? "–")}</div></td>${diffCell(headFT(x.c), has)}<td><span class="status ${cls}">${txt}</span></td></tr>`;
+  }).join("") + "</tbody>";
+}
+function renderTables() {
+  const cons = consultant(consId), proj = project(projId);
+  $("byProjTitle").textContent = cons ? `Alle projecten voor ${cons.name}` : "Alle projecten";
+  $("byConsTitle").textContent = proj ? `Alle consultants op ${proj.number}` : "Alle consultants";
+  const allocFor = (cid, pid) => state.allocations.find((a) => a.consultantId === cid && a.projectId === pid);
+  const projRows = cons ? state.projects.map((p) => { const a = allocFor(cons.id, p.id); const inp = inputFor(cons, p, a ? { assign: a.assign, scale: a.scale } : {}); return { id: p.id, title: p.number, sub: p.client || p.name, cao: p.cao, scale: inp.scale, c: calc(inp), alloc: !!a, sel: p.id === projId }; }) : [];
+  const consRows = proj ? state.consultants.map((k) => { const a = allocFor(k.id, proj.id); const inp = inputFor(k, proj, a ? { assign: a.assign, scale: a.scale } : {}); return { id: k.id, title: k.name, sub: (level(k.level) || {}).name || "Niveau onbekend", cao: proj.cao, scale: inp.scale, c: calc(inp), alloc: !!a, sel: k.id === consId }; }) : [];
+  $("byProj").innerHTML = rankRows(projRows, "Project", "project");
+  $("byCons").innerHTML = rankRows(consRows, "Consultant", "consultant");
+}
+
+// ---------- interaction ----------
+$("selCons").addEventListener("change", (e) => { consId = e.target.value; over = {}; carMode = "default"; history.replaceState(null, "", "?consultant=" + encodeURIComponent(consId) + "&project=" + encodeURIComponent(projId || "")); render(); });
+$("selProj").addEventListener("change", (e) => { projId = e.target.value; over = {}; carMode = "default"; history.replaceState(null, "", "?consultant=" + encodeURIComponent(consId || "") + "&project=" + encodeURIComponent(projId)); render(); });
+$("p-inc").onclick = () => { state.pension = "inc"; save(); render(); };
+$("p-exc").onclick = () => { state.pension = "exc"; save(); render(); };
+$("resetOver").onclick = () => { over = {}; carMode = "default"; render(); };
+$("overForm").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.id === "o-carmode") {
+    carMode = t.value; const cons = consultant(consId);
+    if (carMode === "default") delete over.car;
+    else if (carMode === "none") over.car = null;
+    else if (cons && cons.car != null) over.car = cons.car; else delete over.car; // no amount yet: keep the consultant's own situation until one is typed
+    render(); if (carMode === "car" && $("o-car")) $("o-car").focus(); return;
+  }
+  const k = t.dataset.k; if (!k) return;
+  if (k === "car" && num(t.value) == null) { const cons = consultant(consId); if (cons && cons.car != null) over.car = cons.car; else delete over.car; render(); return; }
+  if (t.tagName === "SELECT") { if (t.value === "") delete over[k]; else over[k] = t.value; if (k === "version") delete over.scale; }
+  else { const v = num(t.value); if (v == null) delete over[k]; else over[k] = t.dataset.pct ? v / 100 : v; }
+  render();
+});
+function pickRow(tr) { if (tr.dataset.pick === "project") projId = tr.dataset.id; else consId = tr.dataset.id; over = {}; carMode = "default"; carMode = "default"; history.replaceState(null, "", "?consultant=" + encodeURIComponent(consId) + "&project=" + encodeURIComponent(projId)); render(); window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
+for (const id of ["byProj", "byCons"]) {
+  $(id).addEventListener("click", (e) => { const tr = e.target.closest("tr.rij"); if (tr) pickRow(tr); });
+  $(id).addEventListener("keydown", (e) => { if (e.target.matches("tr.rij") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); pickRow(e.target); } });
+}
+
+boot(render);
+</script>
+</body>
+</html>
