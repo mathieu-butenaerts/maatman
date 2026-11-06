@@ -1,7 +1,10 @@
-/* MaatMan — shared data, calculation and import for all pages.
-   Data lives in this browser's localStorage under STORE, so the three pages
-   (overview, calculator, settings) always see the same consultants, projects
-   and assumptions. Nothing is sent to Supabase; Supabase is only used to sign in. */
+/* MaatMan — shared data, calculation, import and sign-in for all pages.
+   The data (consultants, projects, allocations, method, assumptions, CAO
+   scales) lives in Supabase, in the maatman_* tables (supabase/schema.sql).
+   Row-level security there decides who may read it (any of the three MaatMan
+   pages) and who may change it (maatman.instellingen). Only personal view
+   choices (reference date, incl./excl. pension, show ended allocations) stay
+   in this browser's localStorage. */
 "use strict";
 
 const LEVELS = [
@@ -30,45 +33,108 @@ const TOGGLES = [
   ["leaseExVat", "Leaseauto en mobiliteitsbudget exclusief btw rekenen", "De Excel rekent ze inclusief 21% btw."],
   ["pensionTwoSided", "Profource meetellen als haar pensioen meer waard is", "De Excel corrigeert alleen als het pensioen bij de klant beter is."],
 ];
-// Fictieve voorbeeldgegevens. Voorbeeld B gebruikt dezelfde invoer als de tweede rij van de oorspronkelijke Excel, zodat "Zoals Excel" dezelfde uitkomst geeft.
-const EXAMPLE = {
-  consultants: [
-    { id: "c-ex1", pfid: "", name: "Voorbeeld A", level: "JUN", pt: 0.9, salary: 4650, holidayFT: 330.67, car: null, notes: [] },
-    { id: "c-ex2", pfid: "", name: "Voorbeeld B", level: "JUN", pt: 1, salary: 3000, holidayFT: 240, car: 637.28, notes: [] },
-  ],
-  projects: [
-    { id: "p-900001", number: "900001", name: "Rijksoverheid – medewerker operations inkoop", client: "Voorbeeldministerie", cao: 19, version: "", scale: "8", scalePos: null },
-    { id: "p-900002", number: "900002", name: "Gemeente – financieel administratief medewerker", client: "Voorbeeldgemeente", cao: 10, version: "", scale: "7", scalePos: null },
-  ],
-  allocations: [
-    { id: "a-ex1", consultantId: "c-ex1", projectId: "p-900001", assign: 1, scale: null, start: null, end: null, notes: [] },
-    { id: "a-ex2", consultantId: "c-ex2", projectId: "p-900002", assign: 1, scale: null, start: null, end: null, notes: [] },
-  ],
-};
+const PAGES = { overzicht: "maatman.dashboard", calculator: "maatman.calculator", instellingen: "maatman.instellingen" };
 const clone = (o) => JSON.parse(JSON.stringify(o));
-const STORE = "maatman-v2";
+const PREFS = "maatman-prefs";
 
 // ---------- state ----------
 function todayISO() { return new Date().toISOString().slice(0, 10); }
-function freshState() {
-  return { ...clone(EXAMPLE), example: true, settings: clone(DEFAULTS), method: "excel", toggles: { ...PRESETS.excel },
-    refDate: todayISO(), pension: "inc", showAll: false, scales: null, importInfo: null };
+function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREFS) || "null") || {}; } catch (e) { return {}; } }
+const prefs0 = loadPrefs();
+let state = {
+  consultants: [], projects: [], allocations: [],
+  settings: clone(DEFAULTS), toggles: { ...PRESETS.excel }, method: "excel", scales: null, importInfo: null, updatedAt: null,
+  refDate: prefs0.refDate || todayISO(), pension: prefs0.pension || "inc", showAll: !!prefs0.showAll,
+};
+let profile = null, canEdit = false;
+// Personal view choices only; shared data is written with the db* functions below.
+function save() { try { localStorage.setItem(PREFS, JSON.stringify({ refDate: state.refDate, pension: state.pension, showAll: state.showAll })); } catch (e) {} }
+function syncMethod() { const m = Object.entries(PRESETS).find(([, p]) => Object.keys(p).every((k) => p[k] === state.toggles[k])); state.method = m ? m[0] : "custom"; }
+function setMethod(m) { state.method = m; if (PRESETS[m]) state.toggles = { ...PRESETS[m] }; return dbSaveShared(); }
+function newId(prefix) { return prefix + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+// ---------- Supabase ----------
+const TABLE = { c: "maatman_consultants", p: "maatman_projects", a: "maatman_allocations" };
+const toRow = {
+  c: (o) => ({ id: o.id, pfid: o.pfid || null, name: o.name || "", level: o.level || null, pt: o.pt ?? 1, salary: o.salary ?? null, holiday_ft: o.holidayFT ?? null, car: o.car ?? null, notes: o.notes || [] }),
+  p: (o) => ({ id: o.id, number: o.number || null, name: o.name || null, client: o.client || null, cao: o.cao ?? null, version: o.version || "", scale: o.scale ?? null, scale_pos: o.scalePos ?? null }),
+  a: (o) => ({ id: o.id, consultant_id: o.consultantId, project_id: o.projectId, assign: o.assign ?? 1, scale: o.scale || null, start_date: o.start || null, end_date: o.end || null, notes: o.notes || [] }),
+};
+const n0 = (v) => v == null ? null : Number(v);
+const fromRow = {
+  c: (r) => ({ id: r.id, pfid: r.pfid || "", name: r.name || "", level: r.level || "", pt: n0(r.pt) ?? 1, salary: n0(r.salary), holidayFT: n0(r.holiday_ft), car: n0(r.car), notes: r.notes || [] }),
+  p: (r) => ({ id: r.id, number: r.number || "", name: r.name || "", client: r.client || "", cao: n0(r.cao), version: r.version || "", scale: r.scale ?? "", scalePos: n0(r.scale_pos) }),
+  a: (r) => ({ id: r.id, consultantId: r.consultant_id, projectId: r.project_id, assign: n0(r.assign) ?? 1, scale: r.scale || null, start: r.start_date || null, end: r.end_date || null, notes: r.notes || [] }),
+};
+// Supabase returns at most 1000 rows per request, so read in pages.
+async function fetchAll(table) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await window.supabase.from(table).select("*").order("id").range(from, from + 999);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < 1000) return out;
+  }
 }
-function loadState() {
+async function reloadAll() {
   try {
-    const s = JSON.parse(localStorage.getItem(STORE) || "null");
-    if (s && Array.isArray(s.consultants)) { s.settings = { ...clone(DEFAULTS), ...s.settings }; return s; }
-    const old = JSON.parse(localStorage.getItem("maatman-v1") || "null");
-    if (old && Array.isArray(old.rows)) return migrateV1(old);
+    const [c, p, a, s] = await Promise.all([fetchAll(TABLE.c), fetchAll(TABLE.p), fetchAll(TABLE.a),
+      window.supabase.from("maatman_settings").select("*").eq("id", 1).maybeSingle()]);
+    if (s.error) throw s.error;
+    state.consultants = c.map(fromRow.c); state.projects = p.map(fromRow.p); state.allocations = a.map(fromRow.a);
+    const row = s.data;
+    state.settings = { ...clone(DEFAULTS), ...(row && row.settings ? row.settings : {}) };
+    state.toggles = row && row.toggles ? { ...PRESETS.excel, ...row.toggles } : { ...PRESETS.excel };
+    state.method = row && row.method ? row.method : "excel";
+    state.scales = row && Array.isArray(row.scales) && row.scales.length ? row.scales : null;
+    state.importInfo = row ? row.import_info : null;
+    state.updatedAt = row ? row.updated_at : null;
+    return true;
+  } catch (err) {
+    notice("Kon de MaatMan-gegevens niet laden: " + (err.message || err) + ". Is supabase/schema.sql al uitgevoerd?", true);
+    return false;
+  }
+}
+async function dbResult(promise) {
+  const { error } = await promise;
+  if (error) { notice("Opslaan mislukt: " + error.message + ". De gegevens zijn opnieuw geladen.", true); await reloadAll(); if (typeof window.render === "function") window.render(); return false; }
+  return true;
+}
+const dbSave = (kind, obj) => dbResult(window.supabase.from(TABLE[kind]).upsert(toRow[kind](obj)));
+const dbDelete = (kind, id) => dbResult(window.supabase.from(TABLE[kind]).delete().eq("id", id));
+const dbSaveShared = () => dbResult(window.supabase.from("maatman_settings").upsert({ id: 1, settings: state.settings, toggles: state.toggles, method: state.method }));
+// Replace all consultants, projects and allocations in one database transaction.
+function dbReplaceAll(data, scales, info) {
+  return dbResult(window.supabase.rpc("maatman_replace_all", {
+    p_consultants: data.consultants.map(toRow.c), p_projects: data.projects.map(toRow.p), p_allocations: data.allocations.map(toRow.a),
+    p_scales: scales || null, p_import_info: info || null,
+  }));
+}
+// Live updates: reload when anyone changes MaatMan data in another tab or browser.
+let liveTimer = null;
+function subscribeLive() {
+  const ch = window.supabase.channel("maatman-live");
+  for (const t of [...Object.values(TABLE), "maatman_settings"]) ch.on("postgres_changes", { event: "*", schema: "public", table: t }, () => {
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(async () => { if (await reloadAll() && typeof window.render === "function") window.render(); }, 400);
+  });
+  ch.subscribe();
+}
+
+// Data from the earlier browser-only versions, which can be copied into the database once.
+function localLegacyData() {
+  try {
+    const v2 = JSON.parse(localStorage.getItem("maatman-v2") || "null");
+    if (v2 && Array.isArray(v2.consultants) && !v2.example && v2.consultants.length) return v2;
+    const v1 = JSON.parse(localStorage.getItem("maatman-v1") || "null");
+    if (v1 && Array.isArray(v1.rows) && v1.rows.length && !v1.rows.some((r) => r.example)) return migrateV1(v1);
   } catch (e) {}
   return null;
 }
+function forgetLegacyData() { try { localStorage.removeItem("maatman-v2"); localStorage.removeItem("maatman-v1"); } catch (e) {} }
 // v1 kept one flat row per allocation; split it into consultants, projects and allocations.
 function migrateV1(old) {
-  const s = freshState();
-  Object.assign(s, { settings: { ...clone(DEFAULTS), ...old.settings }, method: old.method || "excel", toggles: old.toggles || s.toggles,
-    refDate: old.refDate || s.refDate, pension: old.pension || "inc", scales: old.scales || null, importInfo: old.importInfo || null,
-    example: old.rows.some((r) => r.example), consultants: [], projects: [], allocations: [] });
+  const s = { consultants: [], projects: [], allocations: [], scales: old.scales || null, importInfo: old.importInfo || null };
   for (const r of old.rows) {
     const cid = "c-" + (r.pfid || r.id); const pid = "p-" + (r.project || r.id);
     if (!s.consultants.some((c) => c.id === cid)) s.consultants.push({ id: cid, pfid: r.pfid || "", name: r.name, level: r.level, pt: r.pt ?? 1, salary: r.salary, holidayFT: r.holidayFT, car: r.car, notes: [] });
@@ -77,13 +143,6 @@ function migrateV1(old) {
   }
   return s;
 }
-let state = loadState() || freshState();
-function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
-function resetToExample() { const keep = { settings: state.settings, method: state.method, toggles: state.toggles, refDate: state.refDate, pension: state.pension }; state = { ...freshState(), ...keep }; save(); }
-function clearData() { state.consultants = []; state.projects = []; state.allocations = []; state.example = false; state.importInfo = null; save(); }
-function setMethod(m) { state.method = m; if (PRESETS[m]) state.toggles = { ...PRESETS[m] }; save(); }
-function syncMethod() { const m = Object.entries(PRESETS).find(([, p]) => Object.keys(p).every((k) => p[k] === state.toggles[k])); state.method = m ? m[0] : "custom"; }
-function newId(prefix) { return prefix + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 // ---------- helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -237,8 +296,8 @@ function breakdownHTML(c, caoCode, notes = []) {
 function methodLabel() { return state.method === "excel" ? "Zoals Excel" : state.method === "strict" ? "Strikt" : "Aangepast"; }
 function notice(msg, err = false) { const n = $("notice"); if (!n) return; n.hidden = false; n.classList.toggle("err", err); n.textContent = msg; }
 function dataNotice() {
-  if (state.example) notice("Je ziet fictieve voorbeeldgegevens. Importeer het MaatMan-workbook via Instellingen om met echte gegevens te rekenen.");
-  else if (state.importInfo) notice(state.importInfo);
+  if (!state.consultants.length && !state.projects.length) notice(canEdit ? "Er staan nog geen gegevens in MaatMan. Importeer het MaatMan-workbook via Instellingen." : "Er staan nog geen gegevens in MaatMan. Vraag een collega met toegang tot Instellingen om het workbook te importeren.");
+  else if (state.importInfo) notice(state.importInfo + (state.updatedAt ? ` Laatst gewijzigd: ${new Date(state.updatedAt).toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" })}.` : ""));
   else { const n = $("notice"); if (n) n.hidden = true; }
 }
 
@@ -247,7 +306,7 @@ async function importFile(f) {
   try {
     if (typeof XLSX === "undefined") throw new Error("de Excel-lezer is niet geladen");
     const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
-    return importWorkbook(wb, f.name);
+    return await importWorkbook(wb, f.name);
   } catch (err) {
     notice(`Kon ${f.name} niet lezen: ${err.message}. Controleer of het het MaatMan-workbook (.xlsx) is.`, true);
     return false;
@@ -256,8 +315,9 @@ async function importFile(f) {
 function sheetRows(wb, name) { const ws = wb.Sheets[name]; return ws ? XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) : null; }
 function headerIndex(rows, must) { for (let i = 0; i < Math.min(rows.length, 15); i++) if ((rows[i] || []).some((v) => String(v ?? "").trim() === must)) return i; return -1; }
 function colMap(hdr) { const m = {}; (hdr || []).forEach((h, i) => { const k = String(h ?? "").trim(); if (k && !(k in m)) m[k] = i; }); return m; }
-function importWorkbook(wb, fname) {
+async function importWorkbook(wb, fname) {
   const ref = refDate();
+  let scalesList = null;
   const or = sheetRows(wb, "Oracle Projecten-Allocaties");
   if (!or) { notice(`${fname} heeft geen tabblad "Oracle Projecten-Allocaties". Er is niets geïmporteerd.`, true); return false; }
   const hi = headerIndex(or, "PERSON NUMBER");
@@ -272,7 +332,7 @@ function importWorkbook(wb, fname) {
       if (mn == null || mx == null || g(row, "Code CAO") == null) continue;
       list.push({ cao: String(g(row, "CAO") ?? "").trim(), v: String(g(row, "Versie") ?? "").trim(), c: num(g(row, "Code CAO")), s: String(g(row, "Schaal") ?? "").trim(), from: g(row, "Begin (Schaal)"), to: g(row, "Eind (schaal)"), act: num(g(row, "Actief")), hrs: num(g(row, "Wekelijkse arbeidsduur")), min: mn, max: mx, vak: num(g(row, "Vakantiebijslag")), km: num(g(row, "Reiskosten eigen vervoer (uitgegaan met auto)")), home: num(g(row, "Thuiswerk+internet per maand")), eju: num(g(row, "Eindejaarsuitkering")), leaveH: num(g(row, "Totaal verlofuren per jaar")), dayV: num(g(row, "Waarde vakantiedagen")), ikb: num(g(row, "IKB")), pen: num(g(row, "Pensioen werkgeverspremie")), penTxt: g(row, "Pensioen elementen"), fSal: num(g(row, "Periodeloon in schaal")), fToe: num(g(row, "Toeslagen")), fVak: num(g(row, "Vakantiebijslag_2")), fEju: num(g(row, "Vaste uitkeringen (eindejaarsuitkering)")), fran: num(g(row, "Franchise per maand")), other: num(g(row, "Overig per maand")), budget: g(row, "Budgetten2") });
     }
-    if (list.length) state.scales = list;
+    if (list.length) scalesList = list;
   }
   // employees
   const emp = new Map(); const er = sheetRows(wb, "AFAS Medewerkers");
@@ -333,24 +393,26 @@ function importWorkbook(wb, fname) {
     if (proj.cao != cao) anotes.push(`Deze regel noemt cao ${cao}, het project cao ${proj.cao}. Gerekend met de cao van het project.`);
     allocations.push({ id: "a-" + i + "-" + idA, consultantId: cid, projectId: pid, assign: num(row[h["Opdracht%"]]) ?? 1, scale: scale !== String(proj.scale) ? scale : null, start: isoDate(start), end: isoDate(end), notes: anotes });
   });
-  state.consultants = [...consultants.values()];
-  state.projects = [...projects.values()];
-  state.allocations = allocations;
-  state.example = false;
-  state.importInfo = `${allocations.length} allocatie${allocations.length === 1 ? "" : "s"} geïmporteerd uit ${fname}: ${state.consultants.length} consultant${state.consultants.length === 1 ? "" : "s"} en ${state.projects.length} project${state.projects.length === 1 ? "" : "en"}${state.scales ? `, met ${state.scales.length} cao-schalen` : ""}. Salarissen en leaseauto's zijn bepaald per peildatum ${fmtDate(ref)}.`;
-  save();
+  const data = { consultants: [...consultants.values()], projects: [...projects.values()], allocations };
+  const info = `${allocations.length} allocatie${allocations.length === 1 ? "" : "s"} geïmporteerd uit ${fname}: ${data.consultants.length} consultant${data.consultants.length === 1 ? "" : "s"} en ${data.projects.length} project${data.projects.length === 1 ? "" : "en"}${scalesList ? `, met ${scalesList.length} cao-schalen` : ""}. Salarissen en leaseauto's zijn bepaald per peildatum ${fmtDate(ref)}.`;
+  if (!(await dbReplaceAll(data, scalesList, info))) return false;
+  await reloadAll();
   return true;
 }
 
-// ---------- start: same sign-in as Marktmonitor and Leadbeheer ----------
-async function boot(start) {
+// ---------- start: same sign-in as Marktmonitor and Leadbeheer, plus page access ----------
+async function boot(pageKey, start) {
   $("btn-logout").addEventListener("click", () => window.logout());
-  const profile = await window.requireUser();
-  if (!profile) return; // requireUser already redirected to login.html
-  if (profile.role === "admin") $("adminLink").hidden = false;
+  const p = await window.requirePage(pageKey);
+  if (!p) { $("loading").hidden = true; return; } // requirePage redirected to login or showed "Geen toegang"
+  profile = p;
+  canEdit = p.pages.has(PAGES.instellingen);
+  if (p.role === "admin") $("adminLink").hidden = false;
+  document.querySelectorAll(".nav a[data-page]").forEach((a) => { a.hidden = !p.pages.has(a.dataset.page); });
+  $("loading").textContent = "Gegevens laden…";
+  await reloadAll();
   $("loading").hidden = true;
   $("app").hidden = false;
   start();
+  subscribeLive();
 }
-// Another tab changed the data: re-render this page with it.
-window.addEventListener("storage", (e) => { if (e.key === STORE && e.newValue && typeof window.render === "function") { try { state = JSON.parse(e.newValue); window.render(); } catch (err) {} } });

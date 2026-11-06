@@ -31,15 +31,15 @@
     </div>
   </div>
   <nav class="nav" aria-label="Pagina's">
-    <a href="index.html">Overzicht</a>
-    <a href="calculator.html">Calculator</a>
-    <a href="instellingen.html" aria-current="page">Instellingen</a>
+    <a data-page="maatman.dashboard" href="index.html">Overzicht</a>
+    <a data-page="maatman.calculator" href="calculator.html">Calculator</a>
+    <a data-page="maatman.instellingen" href="instellingen.html" aria-current="page">Instellingen</a>
   </nav>
 
   <div id="loading" class="loading">Inloggen controleren…</div>
 
   <main id="app" hidden>
-    <p class="intro">Hier beheer je alles waar MaatMan mee rekent: de gegevens (consultants, projecten en wie op welk project zit) en de aannames van de berekening. Wijzigingen worden direct bewaard in deze browser en gelden meteen op het overzicht en in de calculator.</p>
+    <p class="intro">Hier beheer je alles waar MaatMan mee rekent: de gegevens (consultants, projecten en wie op welk project zit) en de aannames van de berekening. Wijzigingen worden direct opgeslagen in de gedeelde database en gelden meteen voor iedereen op het overzicht en in de calculator.</p>
     <div class="jump">
       <a class="mode-btn" href="#gegevens">Gegevens</a>
       <a class="mode-btn" href="#consultants">Consultants</a>
@@ -53,13 +53,14 @@
     <section class="panel" id="gegevens">
       <div class="panel-head"><h2>Gegevens</h2><span class="hint" id="dataSummary"></span></div>
       <div class="panel-body" style="display:flex;flex-direction:column;gap:12px">
-        <p class="klein" style="margin:0;font-size:12.5px">Importeer het MaatMan-workbook (.xlsx) om alle consultants, projecten en allocaties te vervangen. MaatMan leest de tabbladen Oracle Projecten-Allocaties, AFAS Medewerkers, AFAS Mdw-Looncomponent, AFAS Mdw-Auto en SUGB-Salarischalen. Salarissen en leaseauto's worden bepaald per peildatum.</p>
+        <p class="klein" style="margin:0;font-size:12.5px">Importeer het MaatMan-workbook (.xlsx) om alle consultants, projecten en allocaties in de database te vervangen, voor iedereen. MaatMan leest de tabbladen Oracle Projecten-Allocaties, AFAS Medewerkers, AFAS Mdw-Looncomponent, AFAS Mdw-Auto en SUGB-Salarischalen. Salarissen en leaseauto's worden bepaald per peildatum.</p>
         <div class="pills">
           <label class="btn" for="file" tabindex="0" id="fileBtn">Workbook importeren</label>
           <input id="file" type="file" accept=".xlsx,.xlsm" hidden>
-          <button class="btn btn-quiet" id="loadExample">Voorbeeld laden</button>
+          <button class="btn btn-quiet" id="uploadLocal" hidden>Gegevens uit deze browser overzetten</button>
           <button class="btn btn-danger" id="clearAll">Alle gegevens wissen</button>
         </div>
+        <p class="klein" id="localHint" style="margin:0" hidden></p>
       </div>
     </section>
 
@@ -88,7 +89,7 @@
       <div class="panel-body aannames" id="assumeBox"></div>
     </section>
 
-    <footer>Geïmporteerde gegevens blijven in deze browser en worden nergens naartoe gestuurd. Iedere collega importeert het workbook zelf.</footer>
+    <footer>De gegevens staan in de gedeelde MaatMan-database. Alleen collega's met toegang tot een MaatMan-pagina kunnen ze lezen, en alleen wie toegang heeft tot Instellingen kan ze wijzigen. Toegang regelt een beheerder in het beheerpaneel.</footer>
   </main>
 </div>
 
@@ -101,8 +102,8 @@ const delBtn = (kind, id, label) => `<button class="icon-btn" data-del="${kind}"
 function render() {
   const focusId = document.activeElement && document.activeElement.id && document.activeElement.closest("main") ? document.activeElement.id : null;
   dataNotice();
-  $("dataSummary").textContent = `${state.consultants.length} consultants · ${state.projects.length} projecten · ${state.allocations.length} allocaties${state.example ? " (voorbeeld)" : ""}`;
-  renderCons(); renderProj(); renderAlloc(); renderMethod(); renderAssume();
+  $("dataSummary").textContent = `${state.consultants.length} consultants · ${state.projects.length} projecten · ${state.allocations.length} allocaties`;
+  renderCons(); renderProj(); renderAlloc(); renderMethod(); renderAssume(); renderLocal();
   if (focusId && $(focusId)) $(focusId).focus();
 }
 
@@ -188,8 +189,10 @@ function renderAssume() {
   box.dataset.sig = sig;
 }
 
-// ---------- editing ----------
-function update(kind, id, f, raw) {
+// ---------- editing: every change is written to Supabase straight away ----------
+let busy = false;
+async function withBusy(fn) { if (busy) return; busy = true; document.body.style.cursor = "progress"; try { await fn(); } finally { busy = false; document.body.style.cursor = ""; } }
+async function update(kind, id, f, raw) {
   const list = kind === "c" ? state.consultants : kind === "p" ? state.projects : state.allocations;
   const o = list.find((x) => x.id === id); if (!o) return;
   const pctF = ["pt", "assign", "scalePos"], numF = ["salary", "holidayFT", "car"];
@@ -199,47 +202,80 @@ function update(kind, id, f, raw) {
   else if (f === "version") { o.version = raw; const sc = scalesFor(o.cao, raw || pickVersion(o.cao)); if (sc.length && !sc.some((s) => String(s.s) === String(o.scale))) o.scale = String(sc[0].s); }
   else if (f === "scale" && kind === "a") o.scale = raw || null;
   else o[f] = raw === "" && (f === "start" || f === "end") ? null : raw;
-  state.example = false;
-  save(); render();
+  render();
+  await dbSave(kind, o);
 }
+async function saveShared() { render(); await dbSaveShared(); }
 $("app").addEventListener("change", (e) => {
   const t = e.target;
   if (t.dataset.kind) return update(t.dataset.kind, t.dataset.id, t.dataset.f, t.value);
   if (t.id === "refdate" && t.value) { state.refDate = t.value; save(); return render(); }
-  if (t.dataset.tog) { state.toggles[t.dataset.tog] = t.checked; syncMethod(); save(); return render(); }
-  if (t.dataset.set) { const v = num(t.value); if (v != null) { state.settings[t.dataset.set] = v / +t.dataset.scale; save(); render(); } return; }
-  if (t.dataset.lvl) { const v = num(t.value); if (v != null) { state.settings.levels[+t.dataset.lvl][t.dataset.k] = v; save(); render(); } }
+  if (t.dataset.tog) { state.toggles[t.dataset.tog] = t.checked; syncMethod(); return saveShared(); }
+  if (t.dataset.set) { const v = num(t.value); if (v != null) { state.settings[t.dataset.set] = v / +t.dataset.scale; saveShared(); } return; }
+  if (t.dataset.lvl) { const v = num(t.value); if (v != null) { state.settings.levels[+t.dataset.lvl][t.dataset.k] = v; saveShared(); } }
 });
-$("app").addEventListener("click", (e) => {
-  const m = e.target.closest("[data-method]"); if (m) { setMethod(m.dataset.method); return render(); }
+$("app").addEventListener("click", async (e) => {
+  const m = e.target.closest("[data-method]"); if (m) { state.method = m.dataset.method; state.toggles = { ...PRESETS[state.method] }; return saveShared(); }
   const p = e.target.closest("[data-pension]"); if (p) { state.pension = p.dataset.pension; save(); return render(); }
   const d = e.target.closest("[data-del]"); if (!d) return;
   const id = d.dataset.id, kind = d.dataset.del;
   if (kind === "c") {
     const n = state.allocations.filter((a) => a.consultantId === id).length;
-    if (!confirm(`${(consultant(id) || {}).name || "Deze consultant"} verwijderen${n ? ` met ${n} allocatie${n === 1 ? "" : "s"}` : ""}?`)) return;
+    if (!confirm(`${(consultant(id) || {}).name || "Deze consultant"} verwijderen${n ? ` met ${n} allocatie${n === 1 ? "" : "s"}` : ""}? Dit geldt voor iedereen.`)) return;
     state.consultants = state.consultants.filter((c) => c.id !== id); state.allocations = state.allocations.filter((a) => a.consultantId !== id);
   } else if (kind === "p") {
     const n = state.allocations.filter((a) => a.projectId === id).length;
-    if (!confirm(`Project ${(project(id) || {}).number || ""} verwijderen${n ? ` met ${n} allocatie${n === 1 ? "" : "s"}` : ""}?`)) return;
+    if (!confirm(`Project ${(project(id) || {}).number || ""} verwijderen${n ? ` met ${n} allocatie${n === 1 ? "" : "s"}` : ""}? Dit geldt voor iedereen.`)) return;
     state.projects = state.projects.filter((x) => x.id !== id); state.allocations = state.allocations.filter((a) => a.projectId !== id);
   } else state.allocations = state.allocations.filter((a) => a.id !== id);
-  state.example = false; save(); render();
+  render();
+  await dbDelete(kind, id); // allocations of a deleted consultant or project go with it (on delete cascade)
 });
-$("addCons").onclick = () => { const id = newId("c"); state.consultants.push({ id, pfid: "", name: "Nieuwe consultant", level: "MED", pt: 1, salary: 3500, holidayFT: null, car: null, notes: [] }); state.example = false; save(); render(); const el = $(`c-${id}-name`); el.focus(); el.select(); };
-$("addProj").onclick = () => { const id = newId("p"); const cao = 19; const v = pickVersion(cao); const sc = scalesFor(cao, v); state.projects.push({ id, number: "Nieuw", name: "", client: "", cao, version: "", scale: sc.length ? String(sc[0].s) : "", scalePos: null }); state.example = false; save(); render(); const el = $(`p-${id}-number`); el.focus(); el.select(); };
-$("addAlloc").onclick = () => {
+$("addCons").onclick = () => withBusy(async () => {
+  const c = { id: newId("c"), pfid: "", name: "Nieuwe consultant", level: "MED", pt: 1, salary: 3500, holidayFT: null, car: null, notes: [] };
+  if (!(await dbSave("c", c))) return;
+  state.consultants.push(c); render(); const el = $(`c-${c.id}-name`); el.focus(); el.select();
+});
+$("addProj").onclick = () => withBusy(async () => {
+  const cao = 19; const sc = scalesFor(cao, pickVersion(cao));
+  const p = { id: newId("p"), number: "Nieuw", name: "", client: "", cao, version: "", scale: sc.length ? String(sc[0].s) : "", scalePos: null };
+  if (!(await dbSave("p", p))) return;
+  state.projects.push(p); render(); const el = $(`p-${p.id}-number`); el.focus(); el.select();
+});
+$("addAlloc").onclick = () => withBusy(async () => {
   if (!state.consultants.length || !state.projects.length) return notice("Voeg eerst een consultant en een project toe.", true);
-  const id = newId("a"); state.allocations.push({ id, consultantId: state.consultants[0].id, projectId: state.projects[0].id, assign: 1, scale: null, start: null, end: null, notes: [] });
-  state.example = false; save(); render(); $(`a-${id}-consultantId`).focus();
-};
-$("resetSettings").onclick = () => { state.settings = clone(DEFAULTS); save(); render(); };
-$("loadExample").onclick = () => { resetToExample(); render(); };
-$("clearAll").onclick = () => { if (confirm("Alle consultants, projecten en allocaties uit deze browser wissen? Aannames blijven staan.")) { clearData(); render(); } };
-$("file").addEventListener("change", async (e) => { const f = e.target.files[0]; if (f && await importFile(f)) render(); e.target.value = ""; });
+  const a = { id: newId("a"), consultantId: state.consultants[0].id, projectId: state.projects[0].id, assign: 1, scale: null, start: null, end: null, notes: [] };
+  if (!(await dbSave("a", a))) return;
+  state.allocations.push(a); render(); $(`a-${a.id}-consultantId`).focus();
+});
+$("resetSettings").onclick = () => { state.settings = clone(DEFAULTS); saveShared(); };
+$("clearAll").onclick = () => withBusy(async () => {
+  if (!confirm("Alle consultants, projecten en allocaties uit de MaatMan-database wissen, voor iedereen? Methode, aannames en cao-schalen blijven staan.")) return;
+  if (await dbReplaceAll({ consultants: [], projects: [], allocations: [] }, null, null)) { await reloadAll(); render(); }
+});
+$("file").addEventListener("change", (e) => withBusy(async () => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  if ((state.consultants.length || state.projects.length) && !confirm(`${f.name} vervangt alle ${state.consultants.length} consultants, ${state.projects.length} projecten en ${state.allocations.length} allocaties in de database, voor iedereen. Doorgaan?`)) return;
+  notice(`${f.name} importeren…`);
+  if (await importFile(f)) render();
+}));
 $("fileBtn").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
 
-boot(() => { render(); if (location.hash && $(location.hash.slice(1))) $(location.hash.slice(1)).scrollIntoView(); });
+// Data that was entered in an earlier browser-only version of MaatMan.
+function renderLocal() {
+  const legacy = localLegacyData();
+  $("uploadLocal").hidden = !legacy; $("localHint").hidden = !legacy;
+  if (legacy) $("localHint").textContent = `Deze browser bevat nog ${legacy.consultants.length} consultants, ${legacy.projects.length} projecten en ${legacy.allocations.length} allocaties uit de vorige versie van MaatMan, die alleen lokaal opsloeg. Met "Gegevens uit deze browser overzetten" vervangen ze de gegevens in de database.`;
+}
+$("uploadLocal").onclick = () => withBusy(async () => {
+  const legacy = localLegacyData(); if (!legacy) return;
+  if ((state.consultants.length || state.projects.length) && !confirm(`De gegevens uit deze browser vervangen alle ${state.consultants.length} consultants, ${state.projects.length} projecten en ${state.allocations.length} allocaties in de database, voor iedereen. Doorgaan?`)) return;
+  if (!(await dbReplaceAll(legacy, legacy.scales || null, legacy.importInfo || "Overgezet uit een browser."))) return;
+  forgetLegacyData(); await reloadAll(); render();
+});
+
+boot(PAGES.instellingen, () => { render(); if (location.hash && $(location.hash.slice(1))) $(location.hash.slice(1)).scrollIntoView(); });
 </script>
 </body>
 </html>

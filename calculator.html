@@ -30,15 +30,15 @@
     </div>
   </div>
   <nav class="nav" aria-label="Pagina's">
-    <a href="index.html">Overzicht</a>
-    <a href="calculator.html" aria-current="page">Calculator</a>
-    <a href="instellingen.html">Instellingen</a>
+    <a data-page="maatman.dashboard" href="index.html">Overzicht</a>
+    <a data-page="maatman.calculator" href="calculator.html" aria-current="page">Calculator</a>
+    <a data-page="maatman.instellingen" href="instellingen.html">Instellingen</a>
   </nav>
 
   <div id="loading" class="loading">Inloggen controleren…</div>
 
   <main id="app" hidden>
-    <p class="intro">Kies een consultant en een project om te zien hoe die combinatie uitpakt, ook als die nu niet bestaat. Pas onder <em>Wat als</em> waarden aan om andere situaties door te rekenen. Niets hier wordt opgeslagen; vaste gegevens wijzig je in <a href="instellingen.html">Instellingen</a>.</p>
+    <p class="intro">Kies een consultant en een project om te zien hoe die combinatie uitpakt, ook als die nu niet bestaat. Pas onder <em>Wat als</em> waarden aan om andere situaties door te rekenen. Niets hier wordt opgeslagen; vaste gegevens wijzig je in <a data-page="maatman.instellingen" href="instellingen.html">Instellingen</a>.</p>
     <div id="notice" class="notice" hidden></div>
 
     <div class="calc-layout">
@@ -103,7 +103,7 @@ function syncUrl() { const q = new URLSearchParams(); if (consId) q.set("consult
 function render() {
   pickDefaults(); syncUrl(); dataNotice();
   $("p-inc").setAttribute("aria-pressed", state.pension === "inc"); $("p-exc").setAttribute("aria-pressed", state.pension === "exc");
-  $("methodLink").textContent = methodLabel(); $("refLabel").textContent = fmtDate(state.refDate);
+  $("methodLink").textContent = methodLabel(); $("methodLink").classList.toggle("nolink", !canEdit); $("refLabel").textContent = fmtDate(state.refDate);
   const byName = [...state.consultants].sort((a, b) => String(a.name).localeCompare(String(b.name), "nl"));
   const byNum = [...state.projects].sort((a, b) => String(a.number).localeCompare(String(b.number), "nl", { numeric: true }));
   $("selCons").innerHTML = byName.length ? byName.map((c) => `<option value="${esc(c.id)}" ${c.id === consId ? "selected" : ""}>${esc(c.name)}${c.pfid ? " (" + esc(c.pfid) + ")" : ""}</option>`).join("") : `<option value="">Nog geen consultants</option>`;
@@ -115,7 +115,7 @@ function render() {
 
 function renderOver() {
   const cons = consultant(consId), proj = project(projId);
-  if (!cons || !proj) { $("overForm").innerHTML = `<p class="klein">Voeg eerst consultants en projecten toe in <a href="instellingen.html">Instellingen</a>.</p>`; return; }
+  if (!cons || !proj) { $("overForm").innerHTML = `<p class="klein">Voeg eerst consultants en projecten toe in <a data-page="maatman.instellingen" href="instellingen.html">Instellingen</a>.</p>`; return; }
   const b = base(), inp = currentInput();
   const focusId = document.activeElement && document.activeElement.closest && document.activeElement.closest("#overForm") ? document.activeElement.id : null;
   const dflt = (v, fmt) => v == null || v === "" ? "" : fmt(v);
@@ -204,7 +204,7 @@ for (const id of ["byProj", "byCons"]) {
   $(id).addEventListener("keydown", (e) => { if (e.target.matches("tr.rij") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); pickRow(e.target); } });
 }
 
-boot(render);
+boot(PAGES.calculator, render);
 </script>
 </body>
 </html>

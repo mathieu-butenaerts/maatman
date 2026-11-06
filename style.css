@@ -83,7 +83,8 @@ input::placeholder{ color:var(--dim); }
   background:rgba(255,255,255,0.04); color:var(--muted); border:1px solid rgba(255,255,255,0.1); text-decoration:none; }
 .mode-btn:hover{ color:var(--text); }
 .mode-btn[aria-pressed=true]{ background:rgba(25,157,217,0.18); color:var(--blauw); border-color:rgba(25,157,217,0.45); }
-.mode-btn:disabled{ cursor:default; }
+.mode-btn:disabled, .nolink{ cursor:default; pointer-events:none; }
+a.nolink:not(.mode-btn){ color:inherit; text-decoration:none; }
 .mode-btn:disabled:hover{ color:var(--muted); }
 .spacer{ flex:1; }
 

@@ -30,9 +30,9 @@
     </div>
   </div>
   <nav class="nav" aria-label="Pagina's">
-    <a href="index.html" aria-current="page">Overzicht</a>
-    <a href="calculator.html">Calculator</a>
-    <a href="instellingen.html">Instellingen</a>
+    <a data-page="maatman.dashboard" href="index.html" aria-current="page">Overzicht</a>
+    <a data-page="maatman.calculator" href="calculator.html">Calculator</a>
+    <a data-page="maatman.instellingen" href="instellingen.html">Instellingen</a>
   </nav>
 
   <div id="loading" class="loading">Inloggen controleren…</div>
@@ -56,11 +56,7 @@
         </div>
       </div>
       <div class="ctl"><span>Methode</span>
-        <div class="pills" role="group" aria-label="Methode">
-          <button class="mode-btn" id="m-excel">Zoals Excel</button>
-          <button class="mode-btn" id="m-strict">Strikt</button>
-          <a class="mode-btn" id="m-custom" href="instellingen.html#methode" hidden>Aangepast</a>
-        </div>
+        <div class="pills"><a class="mode-btn" id="methodName" aria-pressed="true" title="De methode geldt voor iedereen en wordt ingesteld in Instellingen"></a></div>
       </div>
     </div>
 
@@ -76,7 +72,7 @@
       <div class="scroll"><table id="allocs"></table></div>
     </section>
 
-    <footer>Geïmporteerde gegevens blijven in deze browser en worden nergens naartoe gestuurd. Dit is een signaleringsinstrument: laat de methode door juridische zaken bevestigen voordat je op de uitkomsten handelt.</footer>
+    <footer>De gegevens staan in de gedeelde MaatMan-database en zijn alleen zichtbaar voor collega's met toegang tot MaatMan. Dit is een signaleringsinstrument: laat de methode door juridische zaken bevestigen voordat je op de uitkomsten handelt.</footer>
   </main>
 </div>
 
@@ -89,8 +85,9 @@ function render() {
   const pressed = (id, on) => $(id).setAttribute("aria-pressed", on);
   pressed("s-current", !state.showAll); pressed("s-all", state.showAll);
   pressed("p-inc", state.pension === "inc"); pressed("p-exc", state.pension === "exc");
-  pressed("m-excel", state.method === "excel"); pressed("m-strict", state.method === "strict");
-  $("m-custom").hidden = state.method !== "custom"; $("m-custom").setAttribute("aria-pressed", "true");
+  $("methodName").textContent = methodLabel();
+  $("methodName").href = canEdit ? "instellingen.html#methode" : "#";
+  $("methodName").classList.toggle("nolink", !canEdit);
   dataNotice();
   const items = visible().map((a) => ({ a, cons: consultant(a.consultantId), proj: project(a.projectId), c: calc(allocInput(a)) }));
   renderCards(items); renderProjects(items); renderAllocs(items);
@@ -116,7 +113,7 @@ function renderProjects(items) {
     const neg = ok.filter((i) => head(i.c) < -0.5);
     return { proj: list[0].proj, list, total: ok.reduce((a, i) => a + head(i.c), 0), short: neg.reduce((a, i) => a + head(i.c), 0), below: neg.length };
   }).sort((a, b) => a.short - b.short || a.total - b.total);
-  if (!rows.length) { $("projects").innerHTML = `<tbody><tr><td class="empty-state">Geen ${state.showAll ? "" : "lopende "}allocaties. Importeer het workbook of voeg allocaties toe via <a href="instellingen.html">Instellingen</a>.</td></tr></tbody>`; return; }
+  if (!rows.length) { $("projects").innerHTML = `<tbody><tr><td class="empty-state">Geen ${state.showAll ? "" : "lopende "}allocaties. Importeer het workbook of voeg allocaties toe via <a data-page="maatman.instellingen" href="instellingen.html">Instellingen</a>.</td></tr></tbody>`; return; }
   $("projects").innerHTML = `<thead><tr><th>Project</th><th>Klant</th><th>Cao · schaal</th><th class="r">Consultants</th><th class="r">Onder klantniveau</th><th class="r">Netto verschil / maand</th><th class="r">Tekort / jaar</th></tr></thead><tbody>` +
     rows.map((p) => `<tr><td><span class="naam tnum">${esc(p.proj ? p.proj.number : "–")}</span><div class="klein">${esc(p.proj ? p.proj.name : "")}</div></td><td>${esc(p.proj ? p.proj.client : "")}</td><td>${p.proj ? esc(caoName(p.proj.cao)) + `<div class="klein">schaal ${esc(p.proj.scale)}</div>` : "–"}</td><td class="r tnum">${p.list.length}</td><td class="r">${p.below ? `<span class="status gap">${p.below}</span>` : '<span class="tnum">0</span>'}</td>${diffCell(p.total)}<td class="r tnum ${p.short < 0 ? "neg" : ""}">${p.short < 0 ? eur0.format(-p.short * 12 * (1 + state.settings.burden)) : "–"}</td></tr>`).join("") + "</tbody>";
 }
@@ -131,7 +128,7 @@ function renderAllocs(items) {
       return `<tr class="rij ${isOpen ? "open" : ""}" data-id="${esc(a.id)}" tabindex="0" aria-expanded="${isOpen}">
         <td>${CHEV}</td>
         <td><span class="status ${cls}">${txt}</span></td>
-        <td><span class="naam">${esc(cons ? cons.name : "Onbekend")}</span>${state.example ? '<span class="tag">voorbeeld</span>' : ""}<div class="klein tnum">${esc(cons ? cons.pfid : "")}</div></td>
+        <td><span class="naam">${esc(cons ? cons.name : "Onbekend")}</span><div class="klein tnum">${esc(cons ? cons.pfid : "")}</div></td>
         <td><span class="tnum">${esc(proj ? proj.number : "–")}</span><div class="klein">${esc(proj ? proj.client : "")}</div></td>
         <td>${esc(caoName(proj ? proj.cao : null))}<div class="klein">schaal ${esc(a.scale || (proj && proj.scale) || "–")} · ${esc(c.version || "–")}</div></td>
         <td class="r tnum">${pct(c.w)}</td>
@@ -174,10 +171,8 @@ $("s-current").onclick = () => { state.showAll = false; save(); render(); };
 $("s-all").onclick = () => { state.showAll = true; save(); render(); };
 $("p-inc").onclick = () => { state.pension = "inc"; save(); render(); };
 $("p-exc").onclick = () => { state.pension = "exc"; save(); render(); };
-$("m-excel").onclick = () => { setMethod("excel"); render(); };
-$("m-strict").onclick = () => { setMethod("strict"); render(); };
 
-boot(render);
+boot(PAGES.overzicht, render);
 </script>
 </body>
 </html>
